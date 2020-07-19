@@ -6,10 +6,10 @@
 #include <stddef.h>
 #include <cjson/cJSON.h>
 
-struct response{
+typedef struct response{
     char* data;
     size_t len;
-};
+}response;
 
 struct artist{
     int id;
@@ -23,20 +23,17 @@ struct album{
 
 struct track{
     char* title;
-    struct artist artist[25];
-    struct album album[25];
+    struct artist* artist;
+    struct album* album;
     int id;
     size_t artists_amount;
     size_t albums_amount;
 };
 
-struct tracks{
-    struct track item[100];
+typedef struct tracks{
+    struct track* item;
     size_t tracks_col;
-};
-
-typedef struct response response;
-typedef struct tracks tracks;
+}tracks;
 
 tracks* yam_search(char*);
 size_t writedata(void*, size_t, size_t, response*);

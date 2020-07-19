@@ -21,19 +21,13 @@ tracks* yam_search(char* query){
             char* search_query = malloc(query_len);
 
             snprintf(search_query, query_len, "%s%s%s", "https://api.music.yandex.net/search?text=", query, "&nocorrect=false&type=all&page=0&playlist-in-best=true");
-            printf("%s\n", search_query);
 
             curl_easy_setopt(curl, CURLOPT_URL, search_query);
             curl_easy_setopt(curl, CURLOPT_USERAGENT, "android");
             curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writedata);
-            if(curl_easy_setopt(curl, CURLOPT_BUFFERSIZE, 20378) == CURLE_UNKNOWN_OPTION){
-                printf("Bufsize err");
-            }
 
             curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
             curl_easy_perform(curl);
-
-            //size_t real_size = strlen(response.data);
 
             if(!response.data)goto end;
 
@@ -78,8 +72,10 @@ size_t writedata(void* data, size_t size, size_t nmemb, struct response *userdat
 }
 
 tracks* get_track_info(cJSON* input_data){
-    struct tracks* tmp = (tracks*)calloc(500, sizeof(tracks));
-    tmp->tracks_col = cJSON_GetArraySize(input_data);
+    size_t trackItm_s = cJSON_GetArraySize(input_data);
+    struct tracks* tmp = (tracks*)malloc(sizeof(tracks));
+    tmp->item = (struct track*)malloc(sizeof(struct track) * trackItm_s);
+    tmp->tracks_col = trackItm_s;
 
     uint i, k, j;
     for(i = 0; i < tmp->tracks_col; i++){
@@ -92,11 +88,13 @@ tracks* get_track_info(cJSON* input_data){
 
             tmp->item[i].albums_amount = cJSON_GetArraySize(albums);
             tmp->item[i].artists_amount = cJSON_GetArraySize(artists);
+            tmp->item[i].album = (struct album*)malloc(sizeof(struct album) * tmp->item[i].albums_amount);
+            tmp->item[i].artist = (struct artist*)malloc(sizeof(struct artist) * tmp->item[i].artists_amount);
 
             if(title){
                 size_t title_s = strlen(title->valuestring);
                 tmp->item[i].title = malloc(title_s + 1);
-                tmp->item[i].title = title->valuestring;
+                memcpy(tmp->item[i].title, title->valuestring, title_s);
                 tmp->item[i].title[title_s] = '\0';
             }
             if(id)tmp->item[i].id = id->valueint;
@@ -106,8 +104,10 @@ tracks* get_track_info(cJSON* input_data){
                 cJSON* ali_name = cJSON_GetObjectItemCaseSensitive(album_item, "title");
                 cJSON* ali_id = cJSON_GetObjectItemCaseSensitive(album_item, "id");
                 if(ali_name){
-                    tmp->item[i].album->name = malloc(strlen(ali_name->valuestring) + 1);
-                    tmp->item[i].album->name = ali_name->valuestring;
+                    size_t album_s = strlen(ali_name->valuestring);
+                    tmp->item[i].album->name = malloc(album_s + 1);
+                    memcpy(tmp->item[i].album->name, ali_name->valuestring, album_s);
+                    tmp->item[i].album->name[album_s] = '\0';
                 }
                 if(ali_id)tmp->item[i].album->id = ali_id->valueint;
             }
@@ -117,8 +117,10 @@ tracks* get_track_info(cJSON* input_data){
                 cJSON* ari_name = cJSON_GetObjectItemCaseSensitive(artist_item, "name");
                 cJSON* ari_id = cJSON_GetObjectItemCaseSensitive(artist_item, "id");
                 if(ari_name){
-                    tmp->item[i].artist->name = malloc(strlen(ari_name->valuestring) + 1);
-                    tmp->item[i].artist->name = ari_name->valuestring;
+                    size_t artist_s = strlen(ari_name->valuestring);
+                    tmp->item[i].artist->name = malloc(artist_s + 1);
+                    memcpy(tmp->item[i].artist->name, ari_name->valuestring, artist_s);
+                    tmp->item[i].artist->name[artist_s] = '\0';
                 }
                 if(ari_id)tmp->item[i].artist->id = ari_id->valueint;
             }
