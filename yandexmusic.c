@@ -5,9 +5,9 @@
 #include <stdlib.h>
 #include <stddef.h>
 
-tracks yam_search(char* query){
+tracks* yam_search(char* query){
     response response;
-    struct tracks tracks_info;
+    struct tracks* tracks_info;
     response.len = 0;
     response.data = NULL;
 
@@ -33,7 +33,7 @@ tracks yam_search(char* query){
             curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
             curl_easy_perform(curl);
 
-            size_t real_size = strlen(response.data);
+            //size_t real_size = strlen(response.data);
 
             if(!response.data)goto end;
 
@@ -60,7 +60,7 @@ tracks yam_search(char* query){
 
     end:
     curl_global_cleanup();
-    printf("%s", tracks_info.item[0].title);
+    printf("%s", tracks_info->item[0].title);
     return tracks_info;
 }
 
@@ -69,21 +69,20 @@ size_t writedata(void* data, size_t size, size_t nmemb, struct response *userdat
         size_t new_len = size*nmemb;
         userdata->data = malloc(new_len + 1);
         memcpy(userdata->data, data, new_len);
-        size_t real_s = strlen(data);
         userdata->data[new_len] = '\0';
         userdata->len = new_len;
 
-        return size*nmemb+1;
+        return size*nmemb;
     }
     return 0;
 }
 
-tracks get_track_info(cJSON* input_data){
-    struct tracks tmp;
-    tmp.tracks_col = cJSON_GetArraySize(input_data);
+tracks* get_track_info(cJSON* input_data){
+    struct tracks* tmp = (tracks*)calloc(500, sizeof(tracks));
+    tmp->tracks_col = cJSON_GetArraySize(input_data);
 
     uint i, k, j;
-    for(i = 0; i < tmp.tracks_col; i++){
+    for(i = 0; i < tmp->tracks_col; i++){
             cJSON* item = cJSON_GetArrayItem(input_data, i);
             cJSON* title = cJSON_GetObjectItemCaseSensitive(item, "title");
             cJSON* id = cJSON_GetObjectItemCaseSensitive(item, "id");
@@ -91,35 +90,37 @@ tracks get_track_info(cJSON* input_data){
             cJSON* albums = cJSON_GetObjectItemCaseSensitive(item, "albums");
             cJSON* artists = cJSON_GetObjectItemCaseSensitive(item, "artists");
 
-            tmp.item[i].albums_amount = cJSON_GetArraySize(albums);
-            tmp.item[i].artists_amount = cJSON_GetArraySize(artists);
+            tmp->item[i].albums_amount = cJSON_GetArraySize(albums);
+            tmp->item[i].artists_amount = cJSON_GetArraySize(artists);
 
             if(title){
-                //tmp.item[i].title = malloc(strlen(title->valuestring) + 1);
-                tmp.item[i].title = title->valuestring;
+                size_t title_s = strlen(title->valuestring);
+                tmp->item[i].title = malloc(title_s + 1);
+                tmp->item[i].title = title->valuestring;
+                tmp->item[i].title[title_s] = '\0';
             }
-            if(id)tmp.item[i].id = id->valueint;
+            if(id)tmp->item[i].id = id->valueint;
 
-            for(k = 0; k < tmp.item[i].albums_amount; k++){
+            for(k = 0; k < tmp->item[i].albums_amount; k++){
                 cJSON* album_item = cJSON_GetArrayItem(albums, k);
                 cJSON* ali_name = cJSON_GetObjectItemCaseSensitive(album_item, "title");
                 cJSON* ali_id = cJSON_GetObjectItemCaseSensitive(album_item, "id");
                 if(ali_name){
-                    //tmp.item[i].album->name = malloc(strlen(ali_name->valuestring) + 1);
-                    tmp.item[i].album->name = ali_name->valuestring;
+                    tmp->item[i].album->name = malloc(strlen(ali_name->valuestring) + 1);
+                    tmp->item[i].album->name = ali_name->valuestring;
                 }
-                if(ali_id)tmp.item[i].album->id = ali_id->valueint;
+                if(ali_id)tmp->item[i].album->id = ali_id->valueint;
             }
 
-            for(j = 0; j < tmp.item[i].artists_amount; j++){
+            for(j = 0; j < tmp->item[i].artists_amount; j++){
                 cJSON* artist_item = cJSON_GetArrayItem(artists, j);
                 cJSON* ari_name = cJSON_GetObjectItemCaseSensitive(artist_item, "name");
                 cJSON* ari_id = cJSON_GetObjectItemCaseSensitive(artist_item, "id");
                 if(ari_name){
-                    //tmp.item[i].artist->name = malloc(strlen(ari_name->valuestring) + 1);
-                    tmp.item[i].artist->name = ari_name->valuestring;
+                    tmp->item[i].artist->name = malloc(strlen(ari_name->valuestring) + 1);
+                    tmp->item[i].artist->name = ari_name->valuestring;
                 }
-                if(ari_id)tmp.item[i].artist->id = ari_id->valueint;
+                if(ari_id)tmp->item[i].artist->id = ari_id->valueint;
             }
         }
 

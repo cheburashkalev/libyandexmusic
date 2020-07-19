@@ -38,8 +38,8 @@ struct tracks{
 typedef struct response response;
 typedef struct tracks tracks;
 
-tracks yam_search(char*);
+tracks* yam_search(char*);
 size_t writedata(void*, size_t, size_t, response*);
-tracks get_track_info(cJSON*);
+tracks* get_track_info(cJSON*);
 
 #endif /* YANDEXMUSIC_H */
