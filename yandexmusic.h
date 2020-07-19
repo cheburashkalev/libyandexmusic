@@ -38,5 +38,6 @@ typedef struct tracks{
 tracks* yam_search(char*);
 size_t writedata(void*, size_t, size_t, response*);
 tracks* get_track_info(cJSON*);
+void get_download_url(int, char*, int);
 
 #endif /* YANDEXMUSIC_H */

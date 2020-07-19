@@ -37,7 +37,7 @@ tracks* yam_search(char* query){
             if(!JSON_resp){
                  error_ptr = (char*)cJSON_GetErrorPtr();
                  if(error_ptr != NULL){
-                     fprintf(stderr, "Error before: %s\n", error_ptr);
+                     fprintf(stderr, "Parsing error. Before: %s\n", error_ptr);
                    }
                  goto end;
               }
@@ -54,7 +54,6 @@ tracks* yam_search(char* query){
 
     end:
     curl_global_cleanup();
-    printf("%s", tracks_info->item[0].title);
     return tracks_info;
 }
 
@@ -129,3 +128,27 @@ tracks* get_track_info(cJSON* input_data){
     return tmp;
 }
 
+void get_download_url(int trackId, char* codec, int bitrate){
+    response response;
+    response.len = 0;
+    CURL* curl = curl_easy_init();
+        if(curl){
+            char* url = malloc(75);
+            snprintf(url, 75, "%s%d%s", "https://api.music.yandex.net/tracks/", trackId, "/download-info");
+
+            curl_easy_setopt(curl, CURLOPT_URL, url);
+            //curl_easy_setopt(curl, CURLOPT_USERAGENT, "libyandexmusic");
+            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writedata);
+
+            curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+            curl_easy_perform(curl);
+
+            cJSON* cJSON_resp = cJSON_Parse(response.data);
+            cJSON* codec;
+            if(cJSON_resp){
+                codec = cJSON_GetObjectItemCaseSensitive(cJSON_resp->child->next->child, "codec");
+            }
+            printf("dd");
+
+        }
+}
