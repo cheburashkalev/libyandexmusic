@@ -12,12 +12,12 @@ typedef struct response{
 }response;
 
 struct artist{
-    int id;
+    unsigned int id;
     char* name;
 };
 
 struct album{
-    int id;
+    unsigned int id;
     char* name;
 };
 
@@ -25,7 +25,7 @@ struct track{
     char* title;
     struct artist* artist;
     struct album* album;
-    int id;
+    unsigned int id;
     size_t artists_amount;
     size_t albums_amount;
 };
@@ -34,6 +34,15 @@ typedef struct tracks{
     struct track* item;
     size_t tracks_col;
 }tracks;
+
+typedef struct download{
+    char* codec;
+    bool* gain;
+    bool* preview;
+    char* downloadInfoUrl;
+    bool* direct;
+    unsigned int bitradeInKbps;
+}download;
 
 tracks* yam_search(char*);
 size_t writedata(void*, size_t, size_t, response*);

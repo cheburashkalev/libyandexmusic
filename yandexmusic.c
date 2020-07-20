@@ -131,6 +131,7 @@ tracks* get_track_info(cJSON* input_data){
 void get_download_url(int trackId, char* codec, int bitrate){
     response response;
     response.len = 0;
+    char* url;
     CURL* curl = curl_easy_init();
         if(curl){
             char* url = malloc(75);
@@ -144,11 +145,42 @@ void get_download_url(int trackId, char* codec, int bitrate){
             curl_easy_perform(curl);
 
             cJSON* cJSON_resp = cJSON_Parse(response.data);
-            cJSON* codec;
-            if(cJSON_resp){
-                codec = cJSON_GetObjectItemCaseSensitive(cJSON_resp->child->next->child, "codec");
+
+            if(strcmp(codec, "mp3") == 0){
+                free(url);
+                url = malloc(strlen(cJSON_resp->child->next->child->next->child->next->next->next->valuestring));
+                url = cJSON_resp->child->next->child->next->child->next->next->next->valuestring;
+            } /*else if(strcmp(codec, "aac") == 0){
+               *     if(bitrate == 64){
+               *            url = realloc(&url, strlen(cJSON_resp->child->next->next->child->next->valuestring));
+               *            url = cJSON_resp->child->next->next->child->next->valuestring;
+               *         }else if(bitrate == 128){
+               *            url = realloc(&url, strlen(cJSON_resp->child->next->next->next->child->next->valuestring));
+               *            url = cJSON_resp->child->next->next->next->child->next->valuestring;
+               *           }else{
+               *               url = realloc(&url, strlen(cJSON_resp->child->next->next->next->next->child->next->valuestring));
+               *               url = cJSON_resp->child->next->next->next->next->child->next->valuestring;
+               *              }
+               * }
+               *
+               */
+
+            curl_global_cleanup();
+            free(response.data);
+            response.len = 0;
+            CURL* curl = curl_easy_init();
+            if(curl){
+                curl_easy_setopt(curl, CURLOPT_URL, url);
+                //curl_easy_setopt(curl, CURLOPT_USERAGENT, "libyandexmusic");
+                curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writedata);
+                curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+                curl_easy_perform(curl);
+
+                printf(response.data);
+
             }
-            printf("dd");
+            curl_global_cleanup();
 
         }
+
 }
