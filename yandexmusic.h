@@ -37,16 +37,15 @@ typedef struct tracks{
 
 typedef struct download{
     char* codec;
-    bool* gain;
-    bool* preview;
+    char* gain;
+    char* preview;
     char* downloadInfoUrl;
-    bool* direct;
-    unsigned int bitradeInKbps;
+    char* direct;
+    unsigned int bitrateInKbps;
 }download;
 
-tracks* yam_search(char*);
-size_t writedata(void*, size_t, size_t, response*);
+tracks* yam_search(char* query);
 tracks* get_track_info(cJSON*);
-void get_download_url(int, char*, int);
+char* get_download_url(int trackId);
 
 #endif /* YANDEXMUSIC_H */
