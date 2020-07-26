@@ -6,7 +6,7 @@
 #include <stddef.h>
 #include "jsmn.h"
 
-static size_t writedata(void*, size_t, size_t, struct response*);
+size_t writedata(void*, size_t, size_t, struct response*);
 static int jsoneq(const char*, jsmntok_t*, const char*);
 
 tracks* yam_search(char* query){
@@ -16,37 +16,65 @@ tracks* yam_search(char* query){
     response.data = NULL;
 
     CURL* curl = curl_easy_init();
+    CURLcode code;
         if(curl){
             char* ptr = strchr(query, ' ');
             while(ptr){ *ptr = '+'; ptr = strchr(query, ' '); }
 
             size_t query_len = strlen(query) + 99;
-
             char* search_query = calloc(query_len, sizeof(char*));
-
             snprintf(search_query, query_len, "%s%s%s", "https://api.music.yandex.net/search?text=", query, "&nocorrect=false&type=all&page=0&playlist-in-best=true");
 
             curl_easy_setopt(curl, CURLOPT_URL, search_query);
             curl_easy_setopt(curl, CURLOPT_USERAGENT, "android");
+            curl_easy_setopt(curl, CURLOPT_BUFFERSIZE, 160000L);
+            curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
             curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writedata);
 
+            struct curl_slist *headers = NULL;
+            headers = curl_slist_append(headers, "Yandex-music-client: Client");
+            curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+
             curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
-            curl_easy_perform(curl);
+            code = curl_easy_perform(curl);
 
             free(search_query);
-
             if(!response.data)goto end;
+
+            jsmn_parser jsmn_resp;
+            jsmntok_t tokens[1024];
+
+            jsmn_init(&jsmn_resp);
+            int r = jsmn_parse(&jsmn_resp, response.data, response.len, tokens, 1024);
+
+            if(r < 0){
+                printf("ERR:: JSON Parse error .. %d\n", r);
+                goto end;
+            }else if(r < 1 || tokens[0].type != JSMN_OBJECT){
+                printf("ERR:: JSON Object expected .. %d\n", r);
+                goto end;
+            }
+            uint toks;
+            for(toks = 0; toks < r; toks++){
+//                if(jsoneq(response.data, &tokens[toks], "title") == 0){
+//                    printf("%.*s", tokens[toks + 1].end - tokens[toks + 1].start, response.data + tokens[toks + 1].start);
+//                    //toks = 1250;
+//                }
+                if(tokens[toks].type == JSMN_OBJECT){
+                    printf("%.*s", tokens[toks + 1].end - tokens[toks + 1].start, response.data + tokens[toks + 1].start);
+                }
+            }
 
             cJSON *JSON_resp = cJSON_Parse(response.data);
 
-            char* error_ptr;
-            if(!JSON_resp){
-                 error_ptr = (char*)cJSON_GetErrorPtr();
-                 if(error_ptr != NULL){
-                     fprintf(stderr, "Parsing error. Before: %s\n", error_ptr);
-                   }
-                 goto end;
-              }
+//            char* error_ptr;
+//            if(!JSON_resp){
+//                 error_ptr = (char*)cJSON_GetErrorPtr();
+//                 if(error_ptr != NULL){
+//                     fprintf(stderr, "Parsing error. Before: %s\n", error_ptr);
+//                   }
+//                 goto end;
+//              }
 
             cJSON* result = cJSON_GetObjectItemCaseSensitive(JSON_resp, "result");
             cJSON* tracks = cJSON_GetObjectItemCaseSensitive(result, "tracks");
@@ -64,7 +92,7 @@ tracks* yam_search(char* query){
 }
 
 /* curl */
-static size_t writedata(void* data, size_t size, size_t nmemb, struct response *userdata){
+size_t writedata(void* data, size_t size, size_t nmemb, struct response *userdata){
     if(userdata->len == 0){
         size_t new_len = size*nmemb;
         userdata->data = calloc(new_len + 1, sizeof(char*));
@@ -78,12 +106,20 @@ static size_t writedata(void* data, size_t size, size_t nmemb, struct response *
 }
 
 /* jsmn */
-static int jsoneq(const char* json, jsmntok_t* tok, const char* s) {
-  if (tok->type == JSMN_STRING && (int)strlen(s) == tok->end - tok->start &&
+static int jsoneq(const char* json, jsmntok_t* tok, const char* s){
+  if(tok->type == JSMN_STRING && (int)strlen(s) == tok->end - tok->start &&
       strncmp(json + tok->start, s, tok->end - tok->start) == 0) {
     return 0;
   }
   return -1;
+}
+
+static int objeq(const char* json, jsmntok_t* tok, const char* s){
+    if(tok->type == JSMN_OBJECT && (int)strlen(s) == tok->end - tok->start &&
+        strncmp(json + tok->start, s, tok->end - tok->start) == 0) {
+      return 0;
+    }
+    return -1;
 }
 
 static char* get_link(jsmntok_t* tokens, char* JSON, uint count){
@@ -227,7 +263,7 @@ char* get_download_url(int trackId){
 
                      char* path = calloc(128, sizeof(char));
                      startptr = strstr(startptr, "<path>") + 6;
-                     snprintf(path, 128, "%s", startptr);
+                     snprintf(path, 256, "%s", startptr);
                      p = 0;
                      while(path[p] != '<'){
                          p++;
@@ -243,7 +279,7 @@ char* get_download_url(int trackId){
                      }
                      ts[p] = '\0';
 
-                     snprintf(download_link, 512, "%s%s%s%s%c%s%s", "https://", host, "/get-mp3/", sign, '/', ts, path);
+                     snprintf(download_link, 768, "%s%s%s%s%c%s%s", "https://", host, "/get-mp3/", sign, '/', ts, path);
                      printf("%s", download_link);
                 }
             }
