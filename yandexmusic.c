@@ -54,35 +54,8 @@ tracks* yam_search(char* query){
                 printf("ERR:: JSON Object expected .. %d\n", r);
                 goto end;
             }
-            uint toks;
-            for(toks = 0; toks < r; toks++){
-//                if(jsoneq(response.data, &tokens[toks], "title") == 0){
-//                    printf("%.*s", tokens[toks + 1].end - tokens[toks + 1].start, response.data + tokens[toks + 1].start);
-//                    //toks = 1250;
-//                }
-                if(tokens[toks].type == JSMN_OBJECT){
-                    printf("%.*s", tokens[toks + 1].end - tokens[toks + 1].start, response.data + tokens[toks + 1].start);
-                }
-            }
+            get_track_info(tokens, response, r);
 
-            cJSON *JSON_resp = cJSON_Parse(response.data);
-
-//            char* error_ptr;
-//            if(!JSON_resp){
-//                 error_ptr = (char*)cJSON_GetErrorPtr();
-//                 if(error_ptr != NULL){
-//                     fprintf(stderr, "Parsing error. Before: %s\n", error_ptr);
-//                   }
-//                 goto end;
-//              }
-
-            cJSON* result = cJSON_GetObjectItemCaseSensitive(JSON_resp, "result");
-            cJSON* tracks = cJSON_GetObjectItemCaseSensitive(result, "tracks");
-            cJSON* results = cJSON_GetObjectItemCaseSensitive(tracks, "results");
-
-            tracks_info = get_track_info(results);
-
-            if(JSON_resp)cJSON_Delete(JSON_resp);
         }
 
     end:
@@ -114,14 +87,6 @@ static int jsoneq(const char* json, jsmntok_t* tok, const char* s){
   return -1;
 }
 
-static int objeq(const char* json, jsmntok_t* tok, const char* s){
-    if(tok->type == JSMN_OBJECT && (int)strlen(s) == tok->end - tok->start &&
-        strncmp(json + tok->start, s, tok->end - tok->start) == 0) {
-      return 0;
-    }
-    return -1;
-}
-
 static char* get_link(jsmntok_t* tokens, char* JSON, uint count){
     char* tmp = calloc(200, sizeof(download));
     uint j = 0;
@@ -138,60 +103,75 @@ static char* get_link(jsmntok_t* tokens, char* JSON, uint count){
     return tmp;
 }
 
-tracks* get_track_info(cJSON* input_data){
-    size_t trackItm_s = cJSON_GetArraySize(input_data);
-    struct tracks* tmp = calloc(1, sizeof(tracks));
-    tmp->item = calloc(trackItm_s, sizeof(struct track));
-    tmp->tracks_col = trackItm_s;
-
-    uint i, k, j;
-    for(i = 0; i < tmp->tracks_col; i++){
-            cJSON* item = cJSON_GetArrayItem(input_data, i);
-            cJSON* title = cJSON_GetObjectItemCaseSensitive(item, "title");
-            cJSON* id = cJSON_GetObjectItemCaseSensitive(item, "id");
-
-            cJSON* albums = cJSON_GetObjectItemCaseSensitive(item, "albums");
-            cJSON* artists = cJSON_GetObjectItemCaseSensitive(item, "artists");
-
-            tmp->item[i].albums_amount = cJSON_GetArraySize(albums);
-            tmp->item[i].artists_amount = cJSON_GetArraySize(artists);
-            tmp->item[i].album = calloc(tmp->item[i].albums_amount, sizeof(struct album));
-            tmp->item[i].artist = calloc(tmp->item[i].artists_amount, sizeof(struct artist));
-
-            if(title){
-                size_t title_s = strlen(title->valuestring);
-                tmp->item[i].title = calloc(title_s + 1, sizeof(char*));
-                memcpy(tmp->item[i].title, title->valuestring, title_s);
-                tmp->item[i].title[title_s] = '\0';
-            }
-            if(id)tmp->item[i].id = id->valueint;
-
-            for(k = 0; k < tmp->item[i].albums_amount; k++){
-                cJSON* album_item = cJSON_GetArrayItem(albums, k);
-                cJSON* ali_name = cJSON_GetObjectItemCaseSensitive(album_item, "title");
-                cJSON* ali_id = cJSON_GetObjectItemCaseSensitive(album_item, "id");
-                if(ali_name){
-                    size_t album_s = strlen(ali_name->valuestring);
-                    tmp->item[i].album->name = calloc(album_s + 1, sizeof(char*));
-                    memcpy(tmp->item[i].album->name, ali_name->valuestring, album_s);
-                    tmp->item[i].album->name[album_s] = '\0';
-                }
-                if(ali_id)tmp->item[i].album->id = ali_id->valueint;
-            }
-
-            for(j = 0; j < tmp->item[i].artists_amount; j++){
-                cJSON* artist_item = cJSON_GetArrayItem(artists, j);
-                cJSON* ari_name = cJSON_GetObjectItemCaseSensitive(artist_item, "name");
-                cJSON* ari_id = cJSON_GetObjectItemCaseSensitive(artist_item, "id");
-                if(ari_name){
-                    size_t artist_s = strlen(ari_name->valuestring);
-                    tmp->item[i].artist->name = calloc(artist_s + 1, sizeof(char*));
-                    memcpy(tmp->item[i].artist->name, ari_name->valuestring, artist_s);
-                    tmp->item[i].artist->name[artist_s] = '\0';
-                }
-                if(ari_id)tmp->item[i].artist->id = ari_id->valueint;
-            }
+tracks* get_track_info(jsmntok_t* tokens, response response, uint tokenCount){
+    struct tracks* tmp;
+    uint toks, start, end;
+    for(toks = 0; toks < tokenCount; toks++){
+        if(jsoneq(response.data, &tokens[toks], "tracks") == 0){
+           start = tokens[toks + 1].start;
+           end = tokens[toks + 1].end;
+           break;
         }
+    }
+    jsmntok_t* tmp2 = &tokens[128];
+    jsmntok_t* tmp3 = &tokens[129];
+    char* tmp1 = calloc(512, sizeof(char));
+    //for(toks = start; toks < end; toks++){
+        memcpy(tmp1, response.data + start, end - start);
+    //}
+//    size_t trackItm_s = cJSON_GetArraySize(input_data);
+//    struct tracks* tmp = calloc(1, sizeof(tracks));
+//    tmp->item = calloc(trackItm_s, sizeof(struct track));
+//    tmp->tracks_col = trackItm_s;
+
+//    uint i, k, j;
+//    for(i = 0; i < tmp->tracks_col; i++){
+//            cJSON* item = cJSON_GetArrayItem(input_data, i);
+//            cJSON* title = cJSON_GetObjectItemCaseSensitive(item, "title");
+//            cJSON* id = cJSON_GetObjectItemCaseSensitive(item, "id");
+
+//            cJSON* albums = cJSON_GetObjectItemCaseSensitive(item, "albums");
+//            cJSON* artists = cJSON_GetObjectItemCaseSensitive(item, "artists");
+
+//            tmp->item[i].albums_amount = cJSON_GetArraySize(albums);
+//            tmp->item[i].artists_amount = cJSON_GetArraySize(artists);
+//            tmp->item[i].album = calloc(tmp->item[i].albums_amount, sizeof(struct album));
+//            tmp->item[i].artist = calloc(tmp->item[i].artists_amount, sizeof(struct artist));
+
+//            if(title){
+//                size_t title_s = strlen(title->valuestring);
+//                tmp->item[i].title = calloc(title_s + 1, sizeof(char*));
+//                memcpy(tmp->item[i].title, title->valuestring, title_s);
+//                tmp->item[i].title[title_s] = '\0';
+//            }
+//            if(id)tmp->item[i].id = id->valueint;
+
+//            for(k = 0; k < tmp->item[i].albums_amount; k++){
+//                cJSON* album_item = cJSON_GetArrayItem(albums, k);
+//                cJSON* ali_name = cJSON_GetObjectItemCaseSensitive(album_item, "title");
+//                cJSON* ali_id = cJSON_GetObjectItemCaseSensitive(album_item, "id");
+//                if(ali_name){
+//                    size_t album_s = strlen(ali_name->valuestring);
+//                    tmp->item[i].album->name = calloc(album_s + 1, sizeof(char*));
+//                    memcpy(tmp->item[i].album->name, ali_name->valuestring, album_s);
+//                    tmp->item[i].album->name[album_s] = '\0';
+//                }
+//                if(ali_id)tmp->item[i].album->id = ali_id->valueint;
+//            }
+
+//            for(j = 0; j < tmp->item[i].artists_amount; j++){
+//                cJSON* artist_item = cJSON_GetArrayItem(artists, j);
+//                cJSON* ari_name = cJSON_GetObjectItemCaseSensitive(artist_item, "name");
+//                cJSON* ari_id = cJSON_GetObjectItemCaseSensitive(artist_item, "id");
+//                if(ari_name){
+//                    size_t artist_s = strlen(ari_name->valuestring);
+//                    tmp->item[i].artist->name = calloc(artist_s + 1, sizeof(char*));
+//                    memcpy(tmp->item[i].artist->name, ari_name->valuestring, artist_s);
+//                    tmp->item[i].artist->name[artist_s] = '\0';
+//                }
+//                if(ari_id)tmp->item[i].artist->id = ari_id->valueint;
+//            }
+//        }
 
     return tmp;
 }
