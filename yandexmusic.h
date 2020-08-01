@@ -4,7 +4,7 @@
 #include "yandexmusic_global.h"
 #include <stdbool.h>
 #include <stddef.h>
-#include "jsmn.h"
+#include <json-c/json.h>
 #include <stdlib.h>
 
 typedef struct response{
@@ -38,15 +38,15 @@ typedef struct tracks{
 
 typedef struct download{
     char* codec;
-    char* gain;
-    char* preview;
+    bool gain;
+    bool preview;
     char* downloadInfoUrl;
-    char* direct;
+    bool direct;
     unsigned int bitrateInKbps;
 }download;
 
 tracks* yam_search(char* query);
-tracks* get_track_info(jsmntok_t* tokens, response response, uint tokenCount);
+tracks* get_track_info(struct json_object* tracks);
 char* get_download_url(int trackId);
 
 #endif /* YANDEXMUSIC_H */

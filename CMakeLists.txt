@@ -14,4 +14,4 @@ add_library(yandexmusic SHARED
 
 target_compile_definitions(yandexmusic PRIVATE YANDEXMUSIC_LIBRARY)
 
-target_link_libraries(yandexmusic PRIVATE cjson curl)
+target_link_libraries(yandexmusic PRIVATE curl json-c)

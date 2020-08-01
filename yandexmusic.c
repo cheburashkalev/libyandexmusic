@@ -1,10 +1,10 @@
 #include "yandexmusic.h"
 #include <curl/curl.h>
 #include <string.h>
-#include <cjson/cJSON.h>
 #include <stdlib.h>
 #include <stddef.h>
 #include "jsmn.h"
+#include <json-c/json.h>
 
 size_t writedata(void*, size_t, size_t, struct response*);
 static int jsoneq(const char*, jsmntok_t*, const char*);
@@ -22,7 +22,7 @@ tracks* yam_search(char* query){
             while(ptr){ *ptr = '+'; ptr = strchr(query, ' '); }
 
             size_t query_len = strlen(query) + 99;
-            char* search_query = calloc(query_len, sizeof(char*));
+            char* search_query = calloc(query_len, sizeof(char));
             snprintf(search_query, query_len, "%s%s%s", "https://api.music.yandex.net/search?text=", query, "&nocorrect=false&type=all&page=0&playlist-in-best=true");
 
             curl_easy_setopt(curl, CURLOPT_URL, search_query);
@@ -41,20 +41,13 @@ tracks* yam_search(char* query){
             free(search_query);
             if(!response.data)goto end;
 
-            jsmn_parser jsmn_resp;
-            jsmntok_t tokens[1024];
-
-            jsmn_init(&jsmn_resp);
-            int r = jsmn_parse(&jsmn_resp, response.data, response.len, tokens, 1024);
-
-            if(r < 0){
-                printf("ERR:: JSON Parse error .. %d\n", r);
-                goto end;
-            }else if(r < 1 || tokens[0].type != JSMN_OBJECT){
-                printf("ERR:: JSON Object expected .. %d\n", r);
-                goto end;
-            }
-            get_track_info(tokens, response, r);
+            int status;
+            struct json_object* json_resp,* tracks,* result,* results;
+            json_resp = json_tokener_parse(response.data);
+            status = json_object_object_get_ex(json_resp, "result", &result);
+            status = json_object_object_get_ex(result, "tracks", &tracks);
+            status = json_object_object_get_ex(tracks, "results", &results);
+            tracks_info = get_track_info(results);
 
         }
 
@@ -78,109 +71,104 @@ size_t writedata(void* data, size_t size, size_t nmemb, struct response *userdat
     return 0;
 }
 
-/* jsmn */
-static int jsoneq(const char* json, jsmntok_t* tok, const char* s){
-  if(tok->type == JSMN_STRING && (int)strlen(s) == tok->end - tok->start &&
-      strncmp(json + tok->start, s, tok->end - tok->start) == 0) {
-    return 0;
-  }
-  return -1;
-}
+download* get_link(response response){
+    json_object* json,* result;
+    json = json_tokener_parse(response.data);
+    result = json_object_object_get(json, "result");
+    size_t arr_size = json_object_array_length(result);
+    download* tmp = calloc(arr_size, sizeof(download));
+    uint i;
+    for(i = 0; i < arr_size; i++){
+        json_object* item,* codec,* gain,* preview,* downloadInfoUrl,* direct,* bitrateInKbps;
+        item = json_object_array_get_idx(result, i);
+        codec = json_object_object_get(item, "codec");
+        gain = json_object_object_get(item, "gain");
+        preview = json_object_object_get(item, "preview");
+        downloadInfoUrl = json_object_object_get(item, "downloadInfoUrl");
+        direct = json_object_object_get(item, "direct");
+        bitrateInKbps = json_object_object_get(item, "bitrateInKbps");
 
-static char* get_link(jsmntok_t* tokens, char* JSON, uint count){
-    char* tmp = calloc(200, sizeof(download));
-    uint j = 0;
-    /* Yuobtvayoumat */
-    start:
-        j++;
-        if(jsoneq(JSON, &tokens[j], "downloadInfoUrl") == 0){
-            tmp = calloc(512, sizeof(char*));
-            snprintf(tmp, 512, "%.*s", tokens[j+1].end - tokens[j+1].start, JSON + tokens[j+1].start);
-            goto end;
-         }else{tmp = NULL;}
-    if(j < count){goto start;}
-    end:
+        tmp[i].codec = (char*)json_object_get_string(codec);
+        tmp[i].gain = json_object_get_boolean(gain);
+        tmp[i].preview = json_object_get_boolean(preview);
+        tmp[i].downloadInfoUrl = (char*)json_object_get_string(downloadInfoUrl);
+        tmp[i].direct = json_object_get_boolean(direct);
+        tmp[i].bitrateInKbps = json_object_get_int(bitrateInKbps);
+    }
     return tmp;
 }
 
-tracks* get_track_info(jsmntok_t* tokens, response response, uint tokenCount){
-    struct tracks* tmp;
-    uint toks, start, end;
-    for(toks = 0; toks < tokenCount; toks++){
-        if(jsoneq(response.data, &tokens[toks], "tracks") == 0){
-           start = tokens[toks + 1].start;
-           end = tokens[toks + 1].end;
-           break;
+tracks* get_track_info(json_object* input_info){
+    size_t trackItm_s = json_object_array_length(input_info);
+//    size_t trackItm_s = cJSON_GetArraySize(input_data);
+    struct tracks* tmp = calloc(1, sizeof(tracks));
+    tmp->item = calloc(trackItm_s, sizeof(struct track));
+    tmp->tracks_col = trackItm_s;
+
+    uint i, k, j;
+    for(i = 0; i < tmp->tracks_col; i++){
+        json_object* item,* title,* id,* albums,* artists;
+
+        item = json_object_array_get_idx(input_info, i);
+        title = json_object_object_get(item, "title");
+        id = json_object_object_get(item, "id");
+
+        albums = json_object_object_get(item, "albums");
+        artists = json_object_object_get(item, "artists");
+
+        tmp->item[i].albums_amount = json_object_array_length(albums);
+        tmp->item[i].artists_amount = json_object_array_length(artists);
+        tmp->item[i].album = calloc(tmp->item[i].albums_amount, sizeof(struct album));
+        tmp->item[i].artist = calloc(tmp->item[i].artists_amount, sizeof(struct artist));
+
+        if(title){
+            //size_t title_s = strlen(title->valuestring);
+            size_t title_s = json_object_get_string_len(title);
+            tmp->item[i].title = calloc(title_s + 1, sizeof(char*));
+            //memcpy(tmp->item[i].title, json_object_get_string(title), title_s);
+            //tmp->item[i].title[title_s] = '\0';
+            tmp->item[i].title = (char*)json_object_get_string(title);
+        }
+        //if(id)tmp->item[i].id = id->valueint;
+        tmp->item[i].id = json_object_get_int(id);
+
+        for(k = 0; k < tmp->item[i].albums_amount; k++){
+            json_object* album_item,* ali_name,* ali_id;
+            album_item = json_object_array_get_idx(albums, k);
+            ali_name = json_object_object_get(album_item, "title");
+            ali_id = json_object_object_get(album_item, "id");
+            if(ali_name){
+                size_t album_s = json_object_get_string_len(ali_name);
+                tmp->item[i].album->name = calloc(album_s + 1, sizeof(char*));
+                //memcpy(tmp->item[i].album->name, json_object_get_string(ali_name), album_s);
+                //tmp->item[i].album->name[album_s] = '\0';
+                tmp->item[i].album->name = (char*)json_object_get_string(ali_name);
+            }
+            if(ali_id)tmp->item[i].album->id = json_object_get_int(ali_id);
+        }
+
+        for(j = 0; j < tmp->item[i].artists_amount; j++){
+            json_object* artist_item,* ari_name,* ari_id;
+            artist_item = json_object_array_get_idx(artists, j);
+            ari_name = json_object_object_get(artist_item, "name");
+            ari_id = json_object_object_get(artist_item, "id");
+            if(ari_name){
+                size_t artist_s = json_object_get_string_len(ari_name);
+                tmp->item[i].artist->name = calloc(artist_s + 1, sizeof(char*));
+                //memcpy(tmp->item[i].artist->name, json_object_get_string(ari_name), artist_s);
+                //tmp->item[i].artist->name[artist_s] = '\0';
+                tmp->item[i].artist->name = (char*)json_object_get_string(ari_name);
+            }
+            if(ari_id)tmp->item[i].artist->id = json_object_get_int(ari_id);
         }
     }
-    jsmntok_t* tmp2 = &tokens[128];
-    jsmntok_t* tmp3 = &tokens[129];
-    char* tmp1 = calloc(512, sizeof(char));
-    //for(toks = start; toks < end; toks++){
-        memcpy(tmp1, response.data + start, end - start);
-    //}
-//    size_t trackItm_s = cJSON_GetArraySize(input_data);
-//    struct tracks* tmp = calloc(1, sizeof(tracks));
-//    tmp->item = calloc(trackItm_s, sizeof(struct track));
-//    tmp->tracks_col = trackItm_s;
-
-//    uint i, k, j;
-//    for(i = 0; i < tmp->tracks_col; i++){
-//            cJSON* item = cJSON_GetArrayItem(input_data, i);
-//            cJSON* title = cJSON_GetObjectItemCaseSensitive(item, "title");
-//            cJSON* id = cJSON_GetObjectItemCaseSensitive(item, "id");
-
-//            cJSON* albums = cJSON_GetObjectItemCaseSensitive(item, "albums");
-//            cJSON* artists = cJSON_GetObjectItemCaseSensitive(item, "artists");
-
-//            tmp->item[i].albums_amount = cJSON_GetArraySize(albums);
-//            tmp->item[i].artists_amount = cJSON_GetArraySize(artists);
-//            tmp->item[i].album = calloc(tmp->item[i].albums_amount, sizeof(struct album));
-//            tmp->item[i].artist = calloc(tmp->item[i].artists_amount, sizeof(struct artist));
-
-//            if(title){
-//                size_t title_s = strlen(title->valuestring);
-//                tmp->item[i].title = calloc(title_s + 1, sizeof(char*));
-//                memcpy(tmp->item[i].title, title->valuestring, title_s);
-//                tmp->item[i].title[title_s] = '\0';
-//            }
-//            if(id)tmp->item[i].id = id->valueint;
-
-//            for(k = 0; k < tmp->item[i].albums_amount; k++){
-//                cJSON* album_item = cJSON_GetArrayItem(albums, k);
-//                cJSON* ali_name = cJSON_GetObjectItemCaseSensitive(album_item, "title");
-//                cJSON* ali_id = cJSON_GetObjectItemCaseSensitive(album_item, "id");
-//                if(ali_name){
-//                    size_t album_s = strlen(ali_name->valuestring);
-//                    tmp->item[i].album->name = calloc(album_s + 1, sizeof(char*));
-//                    memcpy(tmp->item[i].album->name, ali_name->valuestring, album_s);
-//                    tmp->item[i].album->name[album_s] = '\0';
-//                }
-//                if(ali_id)tmp->item[i].album->id = ali_id->valueint;
-//            }
-
-//            for(j = 0; j < tmp->item[i].artists_amount; j++){
-//                cJSON* artist_item = cJSON_GetArrayItem(artists, j);
-//                cJSON* ari_name = cJSON_GetObjectItemCaseSensitive(artist_item, "name");
-//                cJSON* ari_id = cJSON_GetObjectItemCaseSensitive(artist_item, "id");
-//                if(ari_name){
-//                    size_t artist_s = strlen(ari_name->valuestring);
-//                    tmp->item[i].artist->name = calloc(artist_s + 1, sizeof(char*));
-//                    memcpy(tmp->item[i].artist->name, ari_name->valuestring, artist_s);
-//                    tmp->item[i].artist->name[artist_s] = '\0';
-//                }
-//                if(ari_id)tmp->item[i].artist->id = ari_id->valueint;
-//            }
-//        }
-
     return tmp;
 }
 
 char* get_download_url(int trackId){
     response response;
     response.len = 0;
-    char* url = calloc(75, sizeof(char*));;
-    char* download_link = calloc(512, sizeof(char));
+    char* url = calloc(75, sizeof(char*));
     CURL* curl = curl_easy_init();
         if(curl){
             snprintf(url, 75, "%s%d%s", "https://api.music.yandex.net/tracks/", trackId, "/download-info");
@@ -193,28 +181,15 @@ char* get_download_url(int trackId){
 
             curl_easy_cleanup(curl);
 
-            jsmn_parser jsmn_resp;
-            jsmntok_t t[70];
-            jsmn_init(&jsmn_resp);
-            int r = jsmn_parse(&jsmn_resp, response.data, response.len, t, 70);
+            download* download_info = get_link(response);
 
-            if(r < 0){
-                printf("ERR:: JSON Parse error .. %d\n", r);
-                goto end;
-            }else if(r < 1 || t[0].type != JSMN_OBJECT){
-                printf("ERR:: JSON Object expected .. %d\n", r);
-                goto end;
-            }
-
-            char* link = get_link(t, response.data, r);
-
-            if(link){
+            if(download_info[0].downloadInfoUrl){
                 free(url);
                 free(response.data);
                 response.len = 0;
                 CURL* curl = curl_easy_init();
                 if(curl){
-                     curl_easy_setopt(curl, CURLOPT_URL, link);
+                     curl_easy_setopt(curl, CURLOPT_URL, download_info[0].downloadInfoUrl);
                      //curl_easy_setopt(curl, CURLOPT_USERAGENT, "libyandexmusic");
                      curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writedata);
                      curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
@@ -223,7 +198,7 @@ char* get_download_url(int trackId){
 
                      char* sign = calloc(128, sizeof(char));
                      char* startptr;
-                     startptr = strstr(link, "?sign=") + 6;
+                     startptr = strstr(download_info[0].downloadInfoUrl, "?sign=") + 6;
                      snprintf(sign, 128, "%s", startptr);
                      int p = 0;
                      p = 0;
@@ -259,13 +234,17 @@ char* get_download_url(int trackId){
                      }
                      ts[p] = '\0';
 
-                     snprintf(download_link, 768, "%s%s%s%s%c%s%s", "https://", host, "/get-mp3/", sign, '/', ts, path);
-                     printf("%s", download_link);
-                }
-            }
-    }
+                     size_t link_s = 20 + strlen(host) + strlen(sign) + strlen(ts) + strlen(path);
+                     char* download_link = malloc(link_s * sizeof(char) + 1);
 
-    end:
-    curl_global_cleanup();
-    return download_link;
+                     snprintf(download_link, link_s, "%s%s%s%s%c%s%s%c", "https://", host, "/get-mp3/", sign, '/', ts, path, '\0');
+                     //printf("%s", download_link);
+
+                     end:
+                     curl_global_cleanup();
+                     return download_link;
+                }else{return NULL;}
+            }else{return NULL;}
+    }
+    goto end;
 }
