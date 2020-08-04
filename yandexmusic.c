@@ -3,11 +3,9 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stddef.h>
-#include "jsmn.h"
 #include <json-c/json.h>
 
 size_t writedata(void*, size_t, size_t, struct response*);
-static int jsoneq(const char*, jsmntok_t*, const char*);
 
 tracks* yam_search(char* query){
     response response;
@@ -48,7 +46,6 @@ tracks* yam_search(char* query){
             status = json_object_object_get_ex(result, "tracks", &tracks);
             status = json_object_object_get_ex(tracks, "results", &results);
             tracks_info = get_track_info(results);
-
         }
 
     end:
@@ -61,7 +58,7 @@ tracks* yam_search(char* query){
 size_t writedata(void* data, size_t size, size_t nmemb, struct response *userdata){
     if(userdata->len == 0){
         size_t new_len = size*nmemb;
-        userdata->data = calloc(new_len + 1, sizeof(char*));
+        userdata->data = calloc(new_len + 1, sizeof(char));
         memcpy(userdata->data, data, new_len);
         userdata->data[new_len] = '\0';
         userdata->len = new_len;
@@ -88,6 +85,9 @@ download* get_link(response response){
         direct = json_object_object_get(item, "direct");
         bitrateInKbps = json_object_object_get(item, "bitrateInKbps");
 
+        tmp[i].codec = calloc(json_object_get_string_len(codec), sizeof(char));
+        tmp[i].downloadInfoUrl = calloc(json_object_get_string_len(bitrateInKbps), sizeof(char));
+
         tmp[i].codec = (char*)json_object_get_string(codec);
         tmp[i].gain = json_object_get_boolean(gain);
         tmp[i].preview = json_object_get_boolean(preview);
@@ -95,13 +95,13 @@ download* get_link(response response){
         tmp[i].direct = json_object_get_boolean(direct);
         tmp[i].bitrateInKbps = json_object_get_int(bitrateInKbps);
     }
+    free(json);
     return tmp;
 }
 
 tracks* get_track_info(json_object* input_info){
     size_t trackItm_s = json_object_array_length(input_info);
-//    size_t trackItm_s = cJSON_GetArraySize(input_data);
-    struct tracks* tmp = calloc(1, sizeof(tracks));
+    struct tracks* tmp = malloc(sizeof(tracks));
     tmp->item = calloc(trackItm_s, sizeof(struct track));
     tmp->tracks_col = trackItm_s;
 
@@ -122,14 +122,10 @@ tracks* get_track_info(json_object* input_info){
         tmp->item[i].artist = calloc(tmp->item[i].artists_amount, sizeof(struct artist));
 
         if(title){
-            //size_t title_s = strlen(title->valuestring);
             size_t title_s = json_object_get_string_len(title);
-            tmp->item[i].title = calloc(title_s + 1, sizeof(char*));
-            //memcpy(tmp->item[i].title, json_object_get_string(title), title_s);
-            //tmp->item[i].title[title_s] = '\0';
+            tmp->item[i].title = calloc(title_s + 1, sizeof(char));
             tmp->item[i].title = (char*)json_object_get_string(title);
         }
-        //if(id)tmp->item[i].id = id->valueint;
         tmp->item[i].id = json_object_get_int(id);
 
         for(k = 0; k < tmp->item[i].albums_amount; k++){
@@ -139,9 +135,7 @@ tracks* get_track_info(json_object* input_info){
             ali_id = json_object_object_get(album_item, "id");
             if(ali_name){
                 size_t album_s = json_object_get_string_len(ali_name);
-                tmp->item[i].album->name = calloc(album_s + 1, sizeof(char*));
-                //memcpy(tmp->item[i].album->name, json_object_get_string(ali_name), album_s);
-                //tmp->item[i].album->name[album_s] = '\0';
+                tmp->item[i].album->name = calloc(album_s + 1, sizeof(char));
                 tmp->item[i].album->name = (char*)json_object_get_string(ali_name);
             }
             if(ali_id)tmp->item[i].album->id = json_object_get_int(ali_id);
@@ -154,9 +148,7 @@ tracks* get_track_info(json_object* input_info){
             ari_id = json_object_object_get(artist_item, "id");
             if(ari_name){
                 size_t artist_s = json_object_get_string_len(ari_name);
-                tmp->item[i].artist->name = calloc(artist_s + 1, sizeof(char*));
-                //memcpy(tmp->item[i].artist->name, json_object_get_string(ari_name), artist_s);
-                //tmp->item[i].artist->name[artist_s] = '\0';
+                tmp->item[i].artist->name = calloc(artist_s + 1, sizeof(char));
                 tmp->item[i].artist->name = (char*)json_object_get_string(ari_name);
             }
             if(ari_id)tmp->item[i].artist->id = json_object_get_int(ari_id);
@@ -168,7 +160,8 @@ tracks* get_track_info(json_object* input_info){
 char* get_download_url(int trackId){
     response response;
     response.len = 0;
-    char* url = calloc(75, sizeof(char*));
+    char* url = calloc(75, sizeof(char));
+    char* download_link = NULL;
     CURL* curl = curl_easy_init();
         if(curl){
             snprintf(url, 75, "%s%d%s", "https://api.music.yandex.net/tracks/", trackId, "/download-info");
@@ -187,13 +180,13 @@ char* get_download_url(int trackId){
                 free(url);
                 free(response.data);
                 response.len = 0;
-                CURL* curl = curl_easy_init();
-                if(curl){
-                     curl_easy_setopt(curl, CURLOPT_URL, download_info[0].downloadInfoUrl);
+                CURL* curl2 = curl_easy_init();
+                if(curl2){
+                     curl_easy_setopt(curl2, CURLOPT_URL, download_info[0].downloadInfoUrl);
                      //curl_easy_setopt(curl, CURLOPT_USERAGENT, "libyandexmusic");
-                     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writedata);
-                     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
-                     curl_easy_perform(curl);
+                     curl_easy_setopt(curl2, CURLOPT_WRITEFUNCTION, writedata);
+                     curl_easy_setopt(curl2, CURLOPT_WRITEDATA, &response);
+                     curl_easy_perform(curl2);
 
 
                      char* sign = calloc(128, sizeof(char));
@@ -201,7 +194,6 @@ char* get_download_url(int trackId){
                      startptr = strstr(download_info[0].downloadInfoUrl, "?sign=") + 6;
                      snprintf(sign, 128, "%s", startptr);
                      int p = 0;
-                     p = 0;
                      while(sign[p] != '&'){
                          p++;
                      }
@@ -216,9 +208,9 @@ char* get_download_url(int trackId){
                      }
                      host[p] = '\0';
 
-                     char* path = calloc(128, sizeof(char));
+                     char* path = calloc(512, sizeof(char));
                      startptr = strstr(startptr, "<path>") + 6;
-                     snprintf(path, 256, "%s", startptr);
+                     snprintf(path, 512, "%s", startptr);
                      p = 0;
                      while(path[p] != '<'){
                          p++;
@@ -234,17 +226,16 @@ char* get_download_url(int trackId){
                      }
                      ts[p] = '\0';
 
-                     size_t link_s = 20 + strlen(host) + strlen(sign) + strlen(ts) + strlen(path);
-                     char* download_link = malloc(link_s * sizeof(char) + 1);
-
+                     size_t link_s = 40 + strlen(host) + strlen(sign) + strlen(ts) + strlen(path);
+                     download_link = calloc(link_s, sizeof(char));
                      snprintf(download_link, link_s, "%s%s%s%s%c%s%s%c", "https://", host, "/get-mp3/", sign, '/', ts, path, '\0');
-                     //printf("%s", download_link);
 
                      end:
+                     curl_easy_cleanup(curl2);
                      curl_global_cleanup();
                      return download_link;
-                }else{return NULL;}
-            }else{return NULL;}
+                }else{goto end;}
+            }else{goto end;}
     }
     goto end;
 }
