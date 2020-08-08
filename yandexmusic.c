@@ -24,8 +24,8 @@ tracks* yam_search(char* query){
             snprintf(search_query, query_len, "%s%s%s", "https://api.music.yandex.net/search?text=", query, "&nocorrect=false&type=all&page=0&playlist-in-best=true");
 
             curl_easy_setopt(curl, CURLOPT_URL, search_query);
-            curl_easy_setopt(curl, CURLOPT_USERAGENT, "android");
-            curl_easy_setopt(curl, CURLOPT_BUFFERSIZE, 160000L);
+            //curl_easy_setopt(curl, CURLOPT_USERAGENT, "android");
+            curl_easy_setopt(curl, CURLOPT_BUFFERSIZE, CURL_MAX_READ_SIZE);
             curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
             curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writedata);
 
@@ -56,16 +56,17 @@ tracks* yam_search(char* query){
 
 /* curl */
 size_t writedata(void* data, size_t size, size_t nmemb, struct response *userdata){
-    if(userdata->len == 0){
-        size_t new_len = size*nmemb;
+    size_t new_len = userdata->len + (size*nmemb);
+    if(userdata->len != 0){
+        userdata->data = realloc(userdata->data, (new_len + 1) * sizeof(char));
+    }else{
         userdata->data = calloc(new_len + 1, sizeof(char));
-        memcpy(userdata->data, data, new_len);
-        userdata->data[new_len] = '\0';
-        userdata->len = new_len;
-
-        return size*nmemb;
     }
-    return 0;
+    memcpy(userdata->data + userdata->len, data, size*nmemb);
+    userdata->data[new_len] = '\0';
+    userdata->len = new_len;
+
+    return size*nmemb;
 }
 
 download* get_link(response response){
