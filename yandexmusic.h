@@ -45,8 +45,16 @@ typedef struct download{
     unsigned int bitrateInKbps;
 }download;
 
-tracks* yam_search(char* query);
+typedef struct userInfo{
+    char* access_token;
+    unsigned int expires_in;
+    char* token_type;
+    unsigned int uid;
+}userInfo;
+
+tracks* yam_search(char* query, userInfo* userinfo);
 tracks* get_track_info(struct json_object* tracks);
-char* get_download_url(int trackId);
+char* get_download_url(unsigned int trackId, userInfo* userinfo);
+userInfo* get_token(char* grant_type, char* username, char* password);
 
 #endif /* YANDEXMUSIC_H */

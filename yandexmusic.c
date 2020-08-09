@@ -7,14 +7,14 @@
 
 size_t writedata(void*, size_t, size_t, struct response*);
 
-tracks* yam_search(char* query){
+tracks* yam_search(char* query, userInfo* userinfo){
     response response;
     struct tracks* tracks_info = NULL;
     response.len = 0;
     response.data = NULL;
 
     CURL* curl = curl_easy_init();
-    CURLcode code;
+    CURLcode res;
         if(curl){
             char* ptr = strchr(query, ' ');
             while(ptr){ *ptr = '+'; ptr = strchr(query, ' '); }
@@ -34,7 +34,10 @@ tracks* yam_search(char* query){
             curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
             curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
-            code = curl_easy_perform(curl);
+            res = curl_easy_perform(curl);
+            if (res != CURLE_OK) {
+                fprintf(stderr, "curl_easy_perform() failed: %s, at yam_search()\n", curl_easy_strerror(res));
+            }
 
             free(search_query);
             if(!response.data)goto end;
@@ -158,12 +161,13 @@ tracks* get_track_info(json_object* input_info){
     return tmp;
 }
 
-char* get_download_url(int trackId){
+char* get_download_url(unsigned int trackId, userInfo* userinfo){
     response response;
     response.len = 0;
     char* url = calloc(75, sizeof(char));
     char* download_link = NULL;
     CURL* curl = curl_easy_init();
+    CURLcode res;
         if(curl){
             snprintf(url, 75, "%s%d%s", "https://api.music.yandex.net/tracks/", trackId, "/download-info");
 
@@ -171,9 +175,13 @@ char* get_download_url(int trackId){
             //curl_easy_setopt(curl, CURLOPT_USERAGENT, "libyandexmusic");
             curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writedata);
             curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
-            curl_easy_perform(curl);
+            res = curl_easy_perform(curl);
+            if (res != CURLE_OK) {
+                fprintf(stderr, "curl_easy_perform() failed: %s, at get download info url\n", curl_easy_strerror(res));
+            }
 
             curl_easy_cleanup(curl);
+            curl = NULL;
 
             download* download_info = get_link(response);
 
@@ -181,14 +189,16 @@ char* get_download_url(int trackId){
                 free(url);
                 free(response.data);
                 response.len = 0;
-                CURL* curl2 = curl_easy_init();
-                if(curl2){
-                     curl_easy_setopt(curl2, CURLOPT_URL, download_info[0].downloadInfoUrl);
+                curl = curl_easy_init();
+                if(curl){
+                     curl_easy_setopt(curl, CURLOPT_URL, download_info[0].downloadInfoUrl);
                      //curl_easy_setopt(curl, CURLOPT_USERAGENT, "libyandexmusic");
-                     curl_easy_setopt(curl2, CURLOPT_WRITEFUNCTION, writedata);
-                     curl_easy_setopt(curl2, CURLOPT_WRITEDATA, &response);
-                     curl_easy_perform(curl2);
-
+                     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writedata);
+                     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+                     res = curl_easy_perform(curl);
+                     if (res != CURLE_OK) {
+                         fprintf(stderr, "curl_easy_perform() failed: %s, at get download info\n", curl_easy_strerror(res));
+                     }
 
                      char* sign = calloc(128, sizeof(char));
                      char* startptr;
@@ -232,11 +242,75 @@ char* get_download_url(int trackId){
                      snprintf(download_link, link_s, "%s%s%s%s%c%s%s%c", "https://", host, "/get-mp3/", sign, '/', ts, path, '\0');
 
                      end:
-                     curl_easy_cleanup(curl2);
+                     curl_easy_cleanup(curl);
                      curl_global_cleanup();
                      return download_link;
                 }else{goto end;}
             }else{goto end;}
     }
     goto end;
+}
+
+userInfo* get_token(char* grant_type, char* username, char* password){
+    userInfo* token = calloc(1, sizeof(userInfo));
+    char* client_id = "23cabbbdc6cd418abb4b39c32c41195d";
+    char* client_secret = "53bc75238f0c4d08a118e51fe9203300";
+    response response;
+    response.len = 0;
+
+    CURL* curl;
+    CURLcode res;
+
+    curl = curl_easy_init();
+    if(curl){
+        curl_easy_setopt(curl, CURLOPT_URL, "https://oauth.yandex.ru/token");
+        curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writedata);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+        curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+
+        struct curl_slist *headers = NULL;
+        headers = curl_slist_append(headers, "Yandex-music-client: Client");
+        headers = curl_slist_append(headers, "Content-Type: application/x-www-form-urlencoded");
+        size_t body_len = 1 + strlen("grant_type=&client_id=&client_secret=&username=&password=") + strlen(grant_type) + strlen(username) + strlen(password) + strlen(client_id) + strlen(client_secret);
+        char* body = calloc(body_len, sizeof(char));
+        snprintf(body, body_len, "grant_type=%s&client_id=%s&client_secret=%s&username=%s&password=%s", grant_type, client_id, client_secret, username, password);
+        body[body_len] = '\0';
+
+        char* content_lenght = calloc(25, sizeof(char));
+        snprintf(content_lenght, 25 * sizeof(char), "content-lenght: %d", (int)body_len);
+        headers = curl_slist_append(headers, content_lenght);
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body);
+
+        res = curl_easy_perform(curl);
+        if (res != CURLE_OK) {
+            fprintf(stderr, "curl_easy_perform() failed: %s, at get_token()\n", curl_easy_strerror(res));
+        }
+        curl_easy_cleanup(curl);
+
+        json_object* JSON_p,* token_obj,* expires_obj,* token_type_obj,* uid_obj;
+
+        JSON_p = json_tokener_parse(response.data);
+        token_obj = json_object_object_get(JSON_p, "access_token");
+        expires_obj = json_object_object_get(JSON_p, "expires_in");
+        token_type_obj = json_object_object_get(JSON_p, "token_type");
+        uid_obj = json_object_object_get(JSON_p, "uid");
+
+        token->access_token = calloc(json_object_get_string_len(token_obj), sizeof(char));
+        token->access_token = (char*)json_object_get_string(token_obj);
+
+        token->expires_in = json_object_get_int(expires_obj);
+
+        token->token_type = calloc(json_object_get_string_len(token_type_obj), sizeof(char));
+        token->token_type = (char*)json_object_get_string(token_type_obj);
+
+        token->uid = json_object_get_int(uid_obj);
+
+        free(response.data);
+        free(body);
+        return token;
+    }
+    return NULL;
 }
