@@ -10,6 +10,8 @@ add_library(yandexmusic SHARED
   yandexmusic_global.h
   yandexmusic.c
   yandexmusic.h
+  cover.c
+  inside.h
 )
 
 target_compile_definitions(yandexmusic PRIVATE YANDEXMUSIC_LIBRARY)

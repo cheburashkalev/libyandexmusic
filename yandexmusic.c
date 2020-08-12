@@ -1,11 +1,10 @@
 #include "yandexmusic.h"
+#include "inside.h"
 #include <curl/curl.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stddef.h>
 #include <json-c/json.h>
-
-size_t writedata(void*, size_t, size_t, struct response*);
 
 tracks* yam_search(char* query, userInfo* userinfo){
     response response;
@@ -15,54 +14,71 @@ tracks* yam_search(char* query, userInfo* userinfo){
 
     CURL* curl = curl_easy_init();
     CURLcode res;
-        if(curl){
-            char* ptr = strchr(query, ' ');
-            while(ptr){ *ptr = '+'; ptr = strchr(query, ' '); }
+    if(curl){
+        char* ptr = strchr(query, ' ');
+        while(ptr){ *ptr = '+'; ptr = strchr(query, ' '); }
 
-            size_t query_len = strlen(query) + 99;
-            char* search_query = calloc(query_len, sizeof(char));
-            snprintf(search_query, query_len, "%s%s%s", "https://api.music.yandex.net/search?text=", query, "&nocorrect=false&type=all&page=0&playlist-in-best=true");
+        size_t query_len = strlen(query) + 99;
+        char* search_query = calloc(query_len, sizeof(char));
+        snprintf(search_query, query_len, "%s%s%s", "https://api.music.yandex.net/search?text=", query, "&nocorrect=false&type=all&page=0&playlist-in-best=true");
 
-            curl_easy_setopt(curl, CURLOPT_URL, search_query);
-            //curl_easy_setopt(curl, CURLOPT_USERAGENT, "android");
-            curl_easy_setopt(curl, CURLOPT_BUFFERSIZE, CURL_MAX_READ_SIZE);
-            curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writedata);
+        curl_easy_setopt(curl, CURLOPT_URL, search_query);
+        curl_easy_setopt(curl, CURLOPT_USERAGENT, "Windows 10");
+        curl_easy_setopt(curl, CURLOPT_BUFFERSIZE, CURL_MAX_READ_SIZE);
+        curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writedata);
 
-            struct curl_slist *headers = NULL;
-            headers = curl_slist_append(headers, "Yandex-music-client: Client");
-            curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+        struct curl_slist *headers = NULL;
+        headers = curl_slist_append(headers, "X-Yandex-Music-Client: WindowsPhone/4.20");
 
-            curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
-            res = curl_easy_perform(curl);
-            if (res != CURLE_OK) {
-                fprintf(stderr, "curl_easy_perform() failed: %s, at yam_search()\n", curl_easy_strerror(res));
-            }
+        size_t tokenstrlen = 0;
+        char* tokenstr = NULL;
+        if(userinfo->access_token != NULL){
+            tokenstrlen = strlen("Authorization: OAuth ") + strlen(userinfo->access_token) + 1;
 
-            free(search_query);
-            if(!response.data)goto end;
+            tokenstr = calloc(tokenstrlen, sizeof(char));
+            snprintf(tokenstr, tokenstrlen, "Authorization: OAuth %s", userinfo->access_token);
+            headers = curl_slist_append(headers, tokenstr);
+        }
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
-            int status;
-            struct json_object* json_resp,* tracks,* result,* results;
-            json_resp = json_tokener_parse(response.data);
-            status = json_object_object_get_ex(json_resp, "result", &result);
-            status = json_object_object_get_ex(result, "tracks", &tracks);
-            status = json_object_object_get_ex(tracks, "results", &results);
-            tracks_info = get_track_info(results);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+        res = curl_easy_perform(curl);
+        if (res != CURLE_OK) {
+            fprintf(stderr, "curl_easy_perform() failed: %s, at yam_search()\n", curl_easy_strerror(res));
         }
 
-    end:
+        free(search_query);
+        if(!response.data){goto end;}
+
+        int status;
+        struct json_object* json_resp,* tracks,* result,* results;
+        json_resp = json_tokener_parse(response.data);
+        json_object_object_get_ex(json_resp, "result", &result);
+        json_object_object_get_ex(result, "tracks", &tracks);
+        status = json_object_object_get_ex(tracks, "results", &results);
+        if(status == 0){
+            printf("\n\nError:\t%s\n\n", response.data);
+            if(tokenstr != NULL)printf("token str: %s\ttoken str len:  %d\n\n", tokenstr, (int)tokenstrlen);
+            printf("token:  %s\n\n", userinfo->access_token);
+            goto end;
+        }
+        tracks_info = get_track_info(results);
+    }
+
+end:
     free(response.data);
     curl_global_cleanup();
     return tracks_info;
 }
 
 /* curl */
-size_t writedata(void* data, size_t size, size_t nmemb, struct response *userdata){
+size_t writedata(void* data, size_t size, size_t nmemb, struct response* userdata){
     size_t new_len = userdata->len + (size*nmemb);
     if(userdata->len != 0){
         userdata->data = realloc(userdata->data, (new_len + 1) * sizeof(char));
     }else{
+        //userdata = calloc(1, sizeof(response));
         userdata->data = calloc(new_len + 1, sizeof(char));
     }
     memcpy(userdata->data + userdata->len, data, size*nmemb);
@@ -133,16 +149,32 @@ tracks* get_track_info(json_object* input_info){
         tmp->item[i].id = json_object_get_int(id);
 
         for(k = 0; k < tmp->item[i].albums_amount; k++){
-            json_object* album_item,* ali_name,* ali_id;
+            json_object* album_item,* ali_name,* ali_id,* ali_coverUri,* ali_genre,* ali_year;
             album_item = json_object_array_get_idx(albums, k);
-            ali_name = json_object_object_get(album_item, "title");
             ali_id = json_object_object_get(album_item, "id");
+            ali_year = json_object_object_get(album_item, "year");
+            ali_coverUri = json_object_object_get(album_item, "coverUri");
+            ali_genre = json_object_object_get(album_item, "genre");
+            ali_name = json_object_object_get(album_item, "title");
+
+            if(ali_id){
+                tmp->item[i].album->id = json_object_get_int(ali_id);
+            }
+            if(ali_year){
+                tmp->item[i].album->year = json_object_get_int(ali_year);
+            }
+            if(ali_coverUri){
+                tmp->item[i].album->coverUri = calloc(json_object_get_string_len(ali_coverUri) + 1, sizeof(char));
+                tmp->item[i].album->coverUri = (char*)json_object_get_string(ali_coverUri);
+            }
+            if(ali_genre){
+                tmp->item[i].album->genre = calloc(json_object_get_string_len(ali_genre) + 1, sizeof(char));
+                tmp->item[i].album->genre = (char*)json_object_get_string(ali_genre);
+            }
             if(ali_name){
-                size_t album_s = json_object_get_string_len(ali_name);
-                tmp->item[i].album->name = calloc(album_s + 1, sizeof(char));
+                tmp->item[i].album->name = calloc(json_object_get_string_len(ali_name) + 1, sizeof(char));
                 tmp->item[i].album->name = (char*)json_object_get_string(ali_name);
             }
-            if(ali_id)tmp->item[i].album->id = json_object_get_int(ali_id);
         }
 
         for(j = 0; j < tmp->item[i].artists_amount; j++){
@@ -164,89 +196,111 @@ tracks* get_track_info(json_object* input_info){
 char* get_download_url(unsigned int trackId, userInfo* userinfo){
     response response;
     response.len = 0;
+    response.data = NULL;
     char* url = calloc(75, sizeof(char));
     char* download_link = NULL;
     CURL* curl = curl_easy_init();
     CURLcode res;
-        if(curl){
-            snprintf(url, 75, "%s%d%s", "https://api.music.yandex.net/tracks/", trackId, "/download-info");
+    struct curl_slist *headers = NULL;
 
-            curl_easy_setopt(curl, CURLOPT_URL, url);
-            //curl_easy_setopt(curl, CURLOPT_USERAGENT, "libyandexmusic");
-            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writedata);
-            curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
-            res = curl_easy_perform(curl);
-            if (res != CURLE_OK) {
-                fprintf(stderr, "curl_easy_perform() failed: %s, at get download info url\n", curl_easy_strerror(res));
-            }
+    size_t tokenstrlen = 0;
+    char* tokenstr = NULL;
+    if(userinfo->access_token != NULL){
+        tokenstrlen = strlen("Authorization: OAuth ") + strlen(userinfo->access_token) + 1;
+        tokenstr = calloc(tokenstrlen, sizeof(char));
+        snprintf(tokenstr, tokenstrlen, "Authorization: OAuth %s", userinfo->access_token);
+    }
 
-            curl_easy_cleanup(curl);
-            curl = NULL;
+    if(curl){
+        snprintf(url, 75, "%s%d%s", "https://api.music.yandex.net/tracks/", trackId, "/download-info");
 
-            download* download_info = get_link(response);
+        curl_easy_setopt(curl, CURLOPT_URL, url);
+        printf("url: %s\n", url);
+        curl_easy_setopt(curl, CURLOPT_USERAGENT, "Windows 10");
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writedata);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
 
-            if(download_info[0].downloadInfoUrl){
-                free(url);
-                free(response.data);
-                response.len = 0;
-                curl = curl_easy_init();
-                if(curl){
-                     curl_easy_setopt(curl, CURLOPT_URL, download_info[0].downloadInfoUrl);
-                     //curl_easy_setopt(curl, CURLOPT_USERAGENT, "libyandexmusic");
-                     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writedata);
-                     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
-                     res = curl_easy_perform(curl);
-                     if (res != CURLE_OK) {
-                         fprintf(stderr, "curl_easy_perform() failed: %s, at get download info\n", curl_easy_strerror(res));
-                     }
+        headers = curl_slist_append(headers, "X-Yandex-Music-Client: WindowsPhone/4.20");
+        if(tokenstr != NULL){
+            headers = curl_slist_append(headers, tokenstr);
+        }
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+        res = curl_easy_perform(curl);
+        if (res != CURLE_OK) {
+            fprintf(stderr, "curl_easy_perform() failed: %s, at get download info url\n", curl_easy_strerror(res));
+        }
 
-                     char* sign = calloc(128, sizeof(char));
-                     char* startptr;
-                     startptr = strstr(download_info[0].downloadInfoUrl, "?sign=") + 6;
-                     snprintf(sign, 128, "%s", startptr);
-                     int p = 0;
-                     while(sign[p] != '&'){
-                         p++;
-                     }
-                     sign[p] = '\0';
+        curl_easy_cleanup(curl);
+        curl = NULL;
 
-                     char* host = calloc(40, sizeof(char));
-                     startptr = strstr(response.data, "<host>") + 6;
-                     snprintf(host, 40, "%s", startptr);
-                     p = 0;
-                     while(host[p] != '<'){
-                         p++;
-                     }
-                     host[p] = '\0';
+        download* download_info = get_link(response);
 
-                     char* path = calloc(512, sizeof(char));
-                     startptr = strstr(startptr, "<path>") + 6;
-                     snprintf(path, 512, "%s", startptr);
-                     p = 0;
-                     while(path[p] != '<'){
-                         p++;
-                     }
-                     path[p] = '\0';
+        printf("\n\n%s\n\n", response.data);
 
-                     char* ts = calloc(24, sizeof(char));
-                     startptr = strstr(startptr, "<ts>") + 4;
-                     snprintf(ts, 24, "%s", startptr);
-                     p = 0;
-                     while(ts[p] != '<'){
-                         p++;
-                     }
-                     ts[p] = '\0';
+        if(download_info[0].downloadInfoUrl){
+            free(url);
+            free(response.data);
+            response.len = 0;
+            response.data = NULL;
+            curl = curl_easy_init();
+            if(curl){
+                curl_easy_setopt(curl, CURLOPT_URL, download_info[0].downloadInfoUrl);
+                curl_easy_setopt(curl, CURLOPT_USERAGENT, "Windows 10");
+                curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writedata);
+                curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+                curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+                res = curl_easy_perform(curl);
+                if (res != CURLE_OK) {
+                    fprintf(stderr, "curl_easy_perform() failed: %s, at get download info\n", curl_easy_strerror(res));
+                }
 
-                     size_t link_s = 40 + strlen(host) + strlen(sign) + strlen(ts) + strlen(path);
-                     download_link = calloc(link_s, sizeof(char));
-                     snprintf(download_link, link_s, "%s%s%s%s%c%s%s%c", "https://", host, "/get-mp3/", sign, '/', ts, path, '\0');
+                char* sign = calloc(128, sizeof(char));
+                char* startptr;
+                startptr = strstr(download_info[0].downloadInfoUrl, "?sign=") + 6;
+                snprintf(sign, 128, "%s", startptr);
+                int p = 0;
+                while(sign[p] != '&'){
+                    p++;
+                }
+                sign[p] = '\0';
 
-                     end:
-                     curl_easy_cleanup(curl);
-                     curl_global_cleanup();
-                     return download_link;
-                }else{goto end;}
+                char* host = calloc(40, sizeof(char));
+                startptr = strstr(response.data, "<host>") + 6;
+                snprintf(host, 40, "%s", startptr);
+                p = 0;
+                while(host[p] != '<'){
+                    p++;
+                }
+                host[p] = '\0';
+
+                char* path = calloc(512, sizeof(char));
+                startptr = strstr(startptr, "<path>") + 6;
+                snprintf(path, 512, "%s", startptr);
+                p = 0;
+                while(path[p] != '<'){
+                    p++;
+                }
+                path[p] = '\0';
+
+                char* ts = calloc(24, sizeof(char));
+                startptr = strstr(startptr, "<ts>") + 4;
+                snprintf(ts, 24, "%s", startptr);
+                p = 0;
+                while(ts[p] != '<'){
+                    p++;
+                }
+                ts[p] = '\0';
+
+                size_t link_s = 40 + strlen(host) + strlen(sign) + strlen(ts) + strlen(path);
+                download_link = calloc(link_s, sizeof(char));
+                snprintf(download_link, link_s, "%s%s%s%s%c%s%s%c", "https://", host, "/get-mp3/", sign, '/', ts, path, '\0');
+
+end:
+                curl_easy_cleanup(curl);
+                curl_global_cleanup();
+                return download_link;
             }else{goto end;}
+        }else{goto end;}
     }
     goto end;
 }

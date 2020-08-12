@@ -1,16 +1,12 @@
 #ifndef YANDEXMUSIC_H
 #define YANDEXMUSIC_H
+#ifdef __cplusplus
+extern "C"{
+#endif
 
 #include "yandexmusic_global.h"
 #include <stdbool.h>
 #include <stddef.h>
-#include <json-c/json.h>
-#include <stdlib.h>
-
-typedef struct response{
-    char* data;
-    size_t len;
-}response;
 
 struct artist{
     unsigned int id;
@@ -20,6 +16,9 @@ struct artist{
 struct album{
     unsigned int id;
     char* name;
+    unsigned int year;
+    char* genre;
+    char* coverUri;
 };
 
 struct track{
@@ -52,9 +51,19 @@ typedef struct userInfo{
     unsigned int uid;
 }userInfo;
 
+typedef struct cover{
+    char* data;
+    size_t len;
+}cover;
+
 tracks* yam_search(char* query, userInfo* userinfo);
-tracks* get_track_info(struct json_object* tracks);
 char* get_download_url(unsigned int trackId, userInfo* userinfo);
 userInfo* get_token(char* grant_type, char* username, char* password);
 
+/* Cover */
+cover* get_cover(char* url);
+
+#ifdef __cplusplus
+}
+#endif
 #endif /* YANDEXMUSIC_H */
