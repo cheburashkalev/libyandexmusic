@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <stddef.h>
 #include <json-c/json.h>
+//#define DEBUG
 
 tracks* yam_search(char* query, userInfo* userinfo){
     response response;
@@ -59,8 +60,10 @@ tracks* yam_search(char* query, userInfo* userinfo){
         status = json_object_object_get_ex(tracks, "results", &results);
         if(status == 0){
             printf("\n\nError:\t%s\n\n", response.data);
+            #ifdef DEBUG
             if(tokenstr != NULL)printf("token str: %s\ttoken str len:  %d\n\n", tokenstr, (int)tokenstrlen);
             printf("token:  %s\n\n", userinfo->access_token);
+            #endif
             goto end;
         }
         tracks_info = get_track_info(results);
@@ -215,7 +218,9 @@ char* get_download_url(unsigned int trackId, userInfo* userinfo){
         snprintf(url, 75, "%s%d%s", "https://api.music.yandex.net/tracks/", trackId, "/download-info");
 
         curl_easy_setopt(curl, CURLOPT_URL, url);
+        #ifdef DEBUG
         printf("url: %s\n", url);
+        #endif
         curl_easy_setopt(curl, CURLOPT_USERAGENT, "Windows 10");
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writedata);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
@@ -234,9 +239,9 @@ char* get_download_url(unsigned int trackId, userInfo* userinfo){
         curl = NULL;
 
         download* download_info = get_link(response);
-
+        #ifdef DEBUG
         printf("\n\n%s\n\n", response.data);
-
+        #endif
         if(download_info[0].downloadInfoUrl){
             free(url);
             free(response.data);
