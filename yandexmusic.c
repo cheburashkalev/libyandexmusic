@@ -73,7 +73,7 @@ tracks* yam_search(char* query, userInfo* userinfo){
 end:
     free(response.data);
     curl_global_cleanup();
-    curl = NULL;
+    free(curl);
     return tracks_info;
 }
 
@@ -237,7 +237,7 @@ char* get_download_url(unsigned int trackId, userInfo* userinfo){
         }
 
         curl_easy_cleanup(curl);
-        curl = NULL;
+        free(curl);
 
         download* download_info = get_link(response);
         #ifdef DEBUG
@@ -304,7 +304,7 @@ char* get_download_url(unsigned int trackId, userInfo* userinfo){
 end:
                 curl_easy_cleanup(curl);
                 curl_global_cleanup();
-                curl = NULL;
+                free(curl);
                 return download_link;
             }else{goto end;}
         }else{goto end;}
@@ -347,7 +347,7 @@ userInfo* get_token(char* grant_type, char* username, char* password){
             fprintf(stderr, "curl_easy_perform() failed: %s, at get_token()\n", curl_easy_strerror(res));
         }
         curl_easy_cleanup(curl);
-        curl = NULL;
+        free(curl);
 
         json_object* JSON_p,* token_obj,* expires_obj,* token_type_obj,* uid_obj;
 
@@ -392,6 +392,6 @@ int download_track(const char* name, const char* url) {
         curl_easy_cleanup(curl);
         fclose(fp);
     } 
-    curl = NULL;
+    free(curl);
     return 0;
 }
