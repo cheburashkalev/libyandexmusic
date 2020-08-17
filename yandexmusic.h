@@ -58,6 +58,7 @@ typedef struct cover{
 
 tracks* yam_search(char* query, userInfo* userinfo);
 char* get_download_url(unsigned int trackId, userInfo* userinfo);
+int download_track(const char* name, const char* url);
 userInfo* get_token(char* grant_type, char* username, char* password);
 
 /* Cover */
