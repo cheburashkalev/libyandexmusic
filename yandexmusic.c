@@ -207,12 +207,10 @@ char* get_download_url(unsigned int trackId, userInfo* userinfo){
     curl = curl_easy_init();
     struct curl_slist *headers = NULL;
 
-    size_t tokenstrlen = 0;
     char* tokenstr = NULL;
     if(userinfo->access_token != NULL){
-        tokenstrlen = strlen("Authorization: OAuth ") + strlen(userinfo->access_token) + 1;
-        tokenstr = calloc(tokenstrlen, sizeof(char));
-        snprintf(tokenstr, tokenstrlen, "Authorization: OAuth %s", userinfo->access_token);
+        tokenstr = calloc(strlen("Authorization: OAuth ") + strlen(userinfo->access_token) + 1, sizeof(char));
+        snprintf(tokenstr,strlen("Authorization: OAuth ") + strlen(userinfo->access_token) + 1, "Authorization: OAuth %s", userinfo->access_token);
     }
 
     if(curl){
