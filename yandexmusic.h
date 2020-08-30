@@ -7,7 +7,7 @@ extern "C"{
 #include "yandexmusic_global.h"
 #include <stdbool.h>
 #include <stddef.h>
-#pragma pack(push, 1)
+//#pragma pack(push, 1)
 struct artist{
     unsigned int id;
     char* name;
@@ -55,7 +55,7 @@ typedef struct cover{
     char* data;
     size_t len;
 }cover;
-#pragma pack(pop)
+//#pragma pack(pop)
 tracks* yam_search(char* query, userInfo* userinfo);
 //track* get_track_info(unsigned int id);
 char* get_download_url(unsigned int trackId, userInfo* userinfo);
