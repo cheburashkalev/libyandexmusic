@@ -162,22 +162,22 @@ tracks* get_track_info(json_object* input_info){
             ali_name = json_object_object_get(album_item, "title");
 
             if(ali_id){
-                tmp->item[i].album->id = json_object_get_int(ali_id);
+                tmp->item[i].album[k].id = json_object_get_int(ali_id);
             }
             if(ali_year){
-                tmp->item[i].album->year = json_object_get_int(ali_year);
+                tmp->item[i].album[k].year = json_object_get_int(ali_year);
             }
             if(ali_coverUri){
-                tmp->item[i].album->coverUri = calloc(json_object_get_string_len(ali_coverUri) + 1, sizeof(char));
-                tmp->item[i].album->coverUri = (char*)json_object_get_string(ali_coverUri);
+                tmp->item[i].album[k].coverUri = calloc(json_object_get_string_len(ali_coverUri) + 1, sizeof(char));
+                tmp->item[i].album[k].coverUri = (char*)json_object_get_string(ali_coverUri);
             }
             if(ali_genre){
-                tmp->item[i].album->genre = calloc(json_object_get_string_len(ali_genre) + 1, sizeof(char));
-                tmp->item[i].album->genre = (char*)json_object_get_string(ali_genre);
+                tmp->item[i].album[k].genre = calloc(json_object_get_string_len(ali_genre) + 1, sizeof(char));
+                tmp->item[i].album[k].genre = (char*)json_object_get_string(ali_genre);
             }
             if(ali_name){
-                tmp->item[i].album->name = calloc(json_object_get_string_len(ali_name) + 1, sizeof(char));
-                tmp->item[i].album->name = (char*)json_object_get_string(ali_name);
+                tmp->item[i].album[k].name = calloc(json_object_get_string_len(ali_name) + 1, sizeof(char));
+                tmp->item[i].album[k].name = (char*)json_object_get_string(ali_name);
             }
         }
 
@@ -188,10 +188,10 @@ tracks* get_track_info(json_object* input_info){
             ari_id = json_object_object_get(artist_item, "id");
             if(ari_name){
                 size_t artist_s = json_object_get_string_len(ari_name);
-                tmp->item[i].artist->name = calloc(artist_s + 1, sizeof(char));
-                tmp->item[i].artist->name = (char*)json_object_get_string(ari_name);
+                tmp->item[i].artist[j].name = calloc(artist_s + 1, sizeof(char));
+                tmp->item[i].artist[j].name = (char*)json_object_get_string(ari_name);
             }
-            if(ari_id)tmp->item[i].artist->id = json_object_get_int(ari_id);
+            if(ari_id)tmp->item[i].artist[j].id = json_object_get_int(ari_id);
         }
     }
     return tmp;
