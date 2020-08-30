@@ -1,19 +1,21 @@
 #include "yandexmusic.h"
 #include "inside.h"
 #include <curl/curl.h>
+#include <curl/easy.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stddef.h>
 #include <json-c/json.h>
+//#define DEBUG
+static CURL* curl;
+CURLcode res;
 
 tracks* yam_search(char* query, userInfo* userinfo){
     response response;
     struct tracks* tracks_info = NULL;
     response.len = 0;
     response.data = NULL;
-
-    CURL* curl = curl_easy_init();
-    CURLcode res;
+    curl = curl_easy_init();
     if(curl){
         char* ptr = strchr(query, ' ');
         while(ptr){ *ptr = '+'; ptr = strchr(query, ' '); }
@@ -59,8 +61,10 @@ tracks* yam_search(char* query, userInfo* userinfo){
         status = json_object_object_get_ex(tracks, "results", &results);
         if(status == 0){
             printf("\n\nError:\t%s\n\n", response.data);
+            #ifdef DEBUG
             if(tokenstr != NULL)printf("token str: %s\ttoken str len:  %d\n\n", tokenstr, (int)tokenstrlen);
             printf("token:  %s\n\n", userinfo->access_token);
+            #endif
             goto end;
         }
         tracks_info = get_track_info(results);
@@ -69,6 +73,7 @@ tracks* yam_search(char* query, userInfo* userinfo){
 end:
     free(response.data);
     curl_global_cleanup();
+    free(curl);
     return tracks_info;
 }
 
@@ -199,23 +204,22 @@ char* get_download_url(unsigned int trackId, userInfo* userinfo){
     response.data = NULL;
     char* url = calloc(75, sizeof(char));
     char* download_link = NULL;
-    CURL* curl = curl_easy_init();
-    CURLcode res;
+    curl = curl_easy_init();
     struct curl_slist *headers = NULL;
 
-    size_t tokenstrlen = 0;
     char* tokenstr = NULL;
     if(userinfo->access_token != NULL){
-        tokenstrlen = strlen("Authorization: OAuth ") + strlen(userinfo->access_token) + 1;
-        tokenstr = calloc(tokenstrlen, sizeof(char));
-        snprintf(tokenstr, tokenstrlen, "Authorization: OAuth %s", userinfo->access_token);
+        tokenstr = calloc(strlen("Authorization: OAuth ") + strlen(userinfo->access_token) + 1, sizeof(char));
+        snprintf(tokenstr,strlen("Authorization: OAuth ") + strlen(userinfo->access_token) + 1, "Authorization: OAuth %s", userinfo->access_token);
     }
 
     if(curl){
         snprintf(url, 75, "%s%d%s", "https://api.music.yandex.net/tracks/", trackId, "/download-info");
 
         curl_easy_setopt(curl, CURLOPT_URL, url);
+        #ifdef DEBUG
         printf("url: %s\n", url);
+        #endif
         curl_easy_setopt(curl, CURLOPT_USERAGENT, "Windows 10");
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writedata);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
@@ -231,12 +235,12 @@ char* get_download_url(unsigned int trackId, userInfo* userinfo){
         }
 
         curl_easy_cleanup(curl);
-        curl = NULL;
+        free(curl);
 
         download* download_info = get_link(response);
-
+        #ifdef DEBUG
         printf("\n\n%s\n\n", response.data);
-
+        #endif
         if(download_info[0].downloadInfoUrl){
             free(url);
             free(response.data);
@@ -298,6 +302,7 @@ char* get_download_url(unsigned int trackId, userInfo* userinfo){
 end:
                 curl_easy_cleanup(curl);
                 curl_global_cleanup();
+                free(curl);
                 return download_link;
             }else{goto end;}
         }else{goto end;}
@@ -311,9 +316,6 @@ userInfo* get_token(char* grant_type, char* username, char* password){
     char* client_secret = "53bc75238f0c4d08a118e51fe9203300";
     response response;
     response.len = 0;
-
-    CURL* curl;
-    CURLcode res;
 
     curl = curl_easy_init();
     if(curl){
@@ -343,6 +345,7 @@ userInfo* get_token(char* grant_type, char* username, char* password){
             fprintf(stderr, "curl_easy_perform() failed: %s, at get_token()\n", curl_easy_strerror(res));
         }
         curl_easy_cleanup(curl);
+        free(curl);
 
         json_object* JSON_p,* token_obj,* expires_obj,* token_type_obj,* uid_obj;
 
@@ -367,4 +370,26 @@ userInfo* get_token(char* grant_type, char* username, char* password){
         return token;
     }
     return NULL;
+}
+int download_track(const char* name, const char* url) {
+    printf("url: %s\n track name: %s\n", url, name);
+    FILE *fp;
+    curl = curl_easy_init();
+    if (curl) {
+        fp = fopen(name,"wb");
+        curl_easy_setopt(curl, CURLOPT_URL, url);
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, NULL);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, fp);
+        res = curl_easy_perform(curl);
+        if(res != CURLE_OK) {
+            curl_easy_cleanup(curl);
+            curl = NULL;
+            fclose(fp);
+            return -1;
+        }
+        curl_easy_cleanup(curl);
+        fclose(fp);
+    } 
+    free(curl);
+    return 0;
 }
