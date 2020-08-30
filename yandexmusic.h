@@ -21,17 +21,17 @@ struct album{
     char* coverUri;
 };
 
-struct track{
+typedef struct track{
     char* title;
     struct artist* artist;
     struct album* album;
     unsigned int id;
     size_t artists_amount;
     size_t albums_amount;
-};
+}track;
 
 typedef struct tracks{
-    struct track* item;
+    track* item;
     size_t tracks_col;
 }tracks;
 
@@ -57,6 +57,7 @@ typedef struct cover{
 }cover;
 
 tracks* yam_search(char* query, userInfo* userinfo);
+//track* get_track_info(unsigned int id);
 char* get_download_url(unsigned int trackId, userInfo* userinfo);
 userInfo* get_token(char* grant_type, char* username, char* password);
 
