@@ -13,6 +13,6 @@ typedef struct response{
 #pragma pack(pop)
 
 size_t writedata(void*, size_t, size_t, struct response*);
-tracks* get_track_info(struct json_object* tracks);
+tracks* get_tracks_info(struct json_object* tracks);
 
 #endif // INSIDE_H

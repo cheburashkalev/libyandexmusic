@@ -10,6 +10,8 @@
 static CURL* curl;
 CURLcode res;
 
+static track* unjson_track_info(response response);
+
 tracks* yam_search(char* query, userInfo* userinfo){
     response response;
     struct tracks* tracks_info = NULL;
@@ -61,13 +63,13 @@ tracks* yam_search(char* query, userInfo* userinfo){
         status = json_object_object_get_ex(tracks, "results", &results);
         if(status == 0){
             printf("\n\nError:\t%s\n\n", response.data);
-            #ifdef DEBUG
+#ifdef DEBUG
             if(tokenstr != NULL)printf("token str: %s\ttoken str len:  %d\n\n", tokenstr, (int)tokenstrlen);
             printf("token:  %s\n\n", userinfo->access_token);
-            #endif
+#endif
             goto end;
         }
-        tracks_info = get_track_info(results);
+        tracks_info = get_tracks_info(results);
     }
 
 end:
@@ -82,7 +84,6 @@ size_t writedata(void* data, size_t size, size_t nmemb, struct response* userdat
     if(userdata->len != 0){
         userdata->data = realloc(userdata->data, (new_len + 1) * sizeof(char));
     }else{
-        //userdata = calloc(1, sizeof(response));
         userdata->data = calloc(new_len + 1, sizeof(char));
     }
     memcpy(userdata->data + userdata->len, data, size*nmemb);
@@ -123,22 +124,21 @@ download* get_link(response response){
     return tmp;
 }
 
-tracks* get_track_info(json_object* input_info){
+tracks* get_tracks_info(json_object* input_info){
     size_t trackItm_s = json_object_array_length(input_info);
     struct tracks* tmp = malloc(sizeof(tracks));
     tmp->item = calloc(trackItm_s, sizeof(struct track));
     tmp->tracks_col = trackItm_s;
 
-    uint i, k, j;
+    uint i, j;
     for(i = 0; i < tmp->tracks_col; i++){
-        json_object* item,* title,* id,* albums,* artists;
+        json_object* track,* title,* id,* albums,* artists;
+        track = json_object_array_get_idx(input_info, i);
+        title = json_object_object_get(track, "title");
+        id = json_object_object_get(track, "id");
 
-        item = json_object_array_get_idx(input_info, i);
-        title = json_object_object_get(item, "title");
-        id = json_object_object_get(item, "id");
-
-        albums = json_object_object_get(item, "albums");
-        artists = json_object_object_get(item, "artists");
+        albums = json_object_object_get(track, "albums");
+        artists = json_object_object_get(track, "artists");
 
         tmp->item[i].albums_amount = json_object_array_length(albums);
         tmp->item[i].artists_amount = json_object_array_length(artists);
@@ -151,35 +151,6 @@ tracks* get_track_info(json_object* input_info){
             tmp->item[i].title = (char*)json_object_get_string(title);
         }
         tmp->item[i].id = json_object_get_int(id);
-
-        for(k = 0; k < tmp->item[i].albums_amount; k++){
-            json_object* album_item,* ali_name,* ali_id,* ali_coverUri,* ali_genre,* ali_year;
-            album_item = json_object_array_get_idx(albums, k);
-            ali_id = json_object_object_get(album_item, "id");
-            ali_year = json_object_object_get(album_item, "year");
-            ali_coverUri = json_object_object_get(album_item, "coverUri");
-            ali_genre = json_object_object_get(album_item, "genre");
-            ali_name = json_object_object_get(album_item, "title");
-
-            if(ali_id){
-                tmp->item[i].album[k].id = json_object_get_int(ali_id);
-            }
-            if(ali_year){
-                tmp->item[i].album[k].year = json_object_get_int(ali_year);
-            }
-            if(ali_coverUri){
-                tmp->item[i].album[k].coverUri = calloc(json_object_get_string_len(ali_coverUri) + 1, sizeof(char));
-                tmp->item[i].album[k].coverUri = (char*)json_object_get_string(ali_coverUri);
-            }
-            if(ali_genre){
-                tmp->item[i].album[k].genre = calloc(json_object_get_string_len(ali_genre) + 1, sizeof(char));
-                tmp->item[i].album[k].genre = (char*)json_object_get_string(ali_genre);
-            }
-            if(ali_name){
-                tmp->item[i].album[k].name = calloc(json_object_get_string_len(ali_name) + 1, sizeof(char));
-                tmp->item[i].album[k].name = (char*)json_object_get_string(ali_name);
-            }
-        }
 
         for(j = 0; j < tmp->item[i].artists_amount; j++){
             json_object* artist_item,* ari_name,* ari_id;
@@ -195,6 +166,130 @@ tracks* get_track_info(json_object* input_info){
         }
     }
     return tmp;
+}
+
+track* get_track_info_from_id(uint id, userInfo* userinfo){
+    response response;
+    struct track* track_info = NULL;
+    response.len = 0;
+    response.data = NULL;
+    curl = curl_easy_init();
+    if(curl){
+        size_t query_len = 50;
+        char* search_query = calloc(query_len, sizeof(char));
+        snprintf(search_query, query_len, "%s%d", "https://api.music.yandex.net/tracks/", id);
+
+        curl_easy_setopt(curl, CURLOPT_URL, search_query);
+        curl_easy_setopt(curl, CURLOPT_USERAGENT, "Windows 10");
+        curl_easy_setopt(curl, CURLOPT_BUFFERSIZE, CURL_MAX_READ_SIZE);
+        curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writedata);
+
+        struct curl_slist *headers = NULL;
+        headers = curl_slist_append(headers, "X-Yandex-Music-Client: WindowsPhone/4.20");
+
+        size_t tokenstrlen = 0;
+        char* tokenstr = NULL;
+        if(userinfo->access_token != NULL){
+            tokenstrlen = strlen("Authorization: OAuth ") + strlen(userinfo->access_token) + 1;
+            tokenstr = calloc(tokenstrlen, sizeof(char));
+            snprintf(tokenstr, tokenstrlen, "Authorization: OAuth %s", userinfo->access_token);
+            headers = curl_slist_append(headers, tokenstr);
+        }
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+        res = curl_easy_perform(curl);
+        if (res != CURLE_OK) {
+            fprintf(stderr, "curl_easy_perform() failed: %s, at yam_search()\n", curl_easy_strerror(res));
+        }
+        free(search_query);
+        if(!response.data){goto end;}
+        track_info = unjson_track_info(response);
+    }
+end:
+    free(response.data);
+    curl_global_cleanup();
+    return track_info;
+}
+
+static track* unjson_track_info(response response){
+    int status;
+    struct json_object* json_resp,* result;
+    json_resp = json_tokener_parse(response.data);
+    status = json_object_object_get_ex(json_resp, "result", &result);
+    if(status == 0){
+        printf("\n\nError:\t%s\n\n", response.data);
+        goto end;
+    }
+    track* tmp = calloc(1, sizeof(track));
+    json_object* track,* title,* id,* albums,* artists;
+    uint k, j;
+
+    track = json_object_array_get_idx(result, 0);
+    title = json_object_object_get(track, "title");
+    id = json_object_object_get(track, "id");
+
+    albums = json_object_object_get(track, "albums");
+    artists = json_object_object_get(track, "artists");
+
+    tmp->albums_amount = json_object_array_length(albums);
+    tmp->artists_amount = json_object_array_length(artists);
+    tmp->album = calloc(tmp->albums_amount, sizeof(struct album));
+    tmp->artist = calloc(tmp->artists_amount, sizeof(struct artist));
+
+    if(title){
+        size_t title_s = json_object_get_string_len(title);
+        tmp->title = calloc(title_s + 1, sizeof(char));
+        tmp->title = (char*)json_object_get_string(title);
+    }
+    tmp->id = json_object_get_int(id);
+
+    for(k = 0; k < tmp->albums_amount; k++){
+        json_object* album_item,* ali_name,* ali_id,* ali_coverUri,* ali_genre,* ali_year;
+        album_item = json_object_array_get_idx(albums, k);
+        ali_id = json_object_object_get(album_item, "id");
+        ali_year = json_object_object_get(album_item, "year");
+        ali_coverUri = json_object_object_get(album_item, "coverUri");
+        ali_genre = json_object_object_get(album_item, "genre");
+        ali_name = json_object_object_get(album_item, "title");
+
+        if(ali_id){
+            tmp->album[k].id = json_object_get_int(ali_id);
+        }
+        if(ali_year){
+            tmp->album[k].year = json_object_get_int(ali_year);
+        }
+        if(ali_coverUri){
+            tmp->album[k].coverUri = calloc(json_object_get_string_len(ali_coverUri) + 1, sizeof(char));
+            tmp->album[k].coverUri = (char*)json_object_get_string(ali_coverUri);
+        }
+        if(ali_genre){
+            tmp->album[k].genre = calloc(json_object_get_string_len(ali_genre) + 1, sizeof(char));
+            tmp->album[k].genre = (char*)json_object_get_string(ali_genre);
+        }
+        if(ali_name){
+            tmp->album[k].name = calloc(json_object_get_string_len(ali_name) + 1, sizeof(char));
+            tmp->album[k].name = (char*)json_object_get_string(ali_name);
+        }
+    }
+
+    for(j = 0; j < tmp->artists_amount; j++){
+        json_object* artist_item,* ari_name,* ari_id;
+        artist_item = json_object_array_get_idx(artists, j);
+        ari_name = json_object_object_get(artist_item, "name");
+        ari_id = json_object_object_get(artist_item, "id");
+        if(ari_name){
+            size_t artist_s = json_object_get_string_len(ari_name);
+            tmp->artist[j].name = calloc(artist_s + 1, sizeof(char));
+            tmp->artist[j].name = (char*)json_object_get_string(ari_name);
+        }
+        if(ari_id)tmp->artist[j].id = json_object_get_int(ari_id);
+    }
+
+    return tmp;
+end:
+    return NULL;
 }
 
 char* get_download_url(unsigned int trackId, userInfo* userinfo){
@@ -213,14 +308,13 @@ char* get_download_url(unsigned int trackId, userInfo* userinfo){
         tokenstr = calloc(tokenstrlen, sizeof(char));
         snprintf(tokenstr, tokenstrlen, "Authorization: OAuth %s", userinfo->access_token);
     }
-
     if(curl){
         snprintf(url, 75, "%s%d%s", "https://api.music.yandex.net/tracks/", trackId, "/download-info");
 
         curl_easy_setopt(curl, CURLOPT_URL, url);
-        #ifdef DEBUG
+#ifdef DEBUG
         printf("url: %s\n", url);
-        #endif
+#endif
         curl_easy_setopt(curl, CURLOPT_USERAGENT, "Windows 10");
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writedata);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
@@ -236,11 +330,10 @@ char* get_download_url(unsigned int trackId, userInfo* userinfo){
         }
 
         curl_easy_cleanup(curl);
-
         download* download_info = get_link(response);
-        #ifdef DEBUG
+#ifdef DEBUG
         printf("\n\n%s\n\n", response.data);
-        #endif
+#endif
         if(download_info[0].downloadInfoUrl){
             free(url);
             free(response.data);
@@ -298,7 +391,6 @@ char* get_download_url(unsigned int trackId, userInfo* userinfo){
                 size_t link_s = 40 + strlen(host) + strlen(sign) + strlen(ts) + strlen(path);
                 download_link = calloc(link_s, sizeof(char));
                 snprintf(download_link, link_s, "%s%s%s%s%c%s%s%c", "https://", host, "/get-mp3/", sign, '/', ts, path, '\0');
-
 end:
                 curl_easy_cleanup(curl);
                 curl_global_cleanup();
@@ -387,6 +479,6 @@ int download_track(const char* name, const char* url) {
         }
         curl_easy_cleanup(curl);
         fclose(fp);
-    } 
+    }
     return 0;
 }

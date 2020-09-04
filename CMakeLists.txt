@@ -3,11 +3,9 @@ cmake_minimum_required(VERSION 3.5)
 project(yandexmusic LANGUAGES C)
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
-set(CMAKE_CXX_STANDARD 11)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_C_FLAGS "-march=native -mtune=generic -ftree-vectorize")
 
 add_library(yandexmusic SHARED
-  yandexmusic_global.h
   yandexmusic.c
   yandexmusic.h
   cover.c
