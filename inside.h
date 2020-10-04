@@ -5,14 +5,13 @@
 #include "yandexmusic.h"
 #include <json-c/json.h>
 #include <stdlib.h>
-#pragma pack(push, 1)
 typedef struct response{
     char* data;
     size_t len;
 }response;
-#pragma pack(pop)
+
+typedef unsigned int uint;
 
 size_t writedata(void*, size_t, size_t, struct response*);
 tracks* get_tracks_info(struct json_object* tracks);
-
 #endif // INSIDE_H

@@ -6,13 +6,12 @@
 #include <stdlib.h>
 #include <stddef.h>
 #include <json-c/json.h>
-//#define DEBUG
 static CURL* curl;
 CURLcode res;
 
 static track* unjson_track_info(response response);
 
-tracks* yam_search(char* query, userInfo* userinfo){
+tracks* yam_search(char* query, userInfo* userinfo, char* proxy){
     response response;
     struct tracks* tracks_info = NULL;
     response.len = 0;
@@ -27,9 +26,18 @@ tracks* yam_search(char* query, userInfo* userinfo){
         snprintf(search_query, query_len, "%s%s%s", "https://api.music.yandex.net/search?text=", query, "&nocorrect=false&type=all&page=0&playlist-in-best=true");
 
         curl_easy_setopt(curl, CURLOPT_URL, search_query);
+        curl_easy_setopt(curl, CURLOPT_PROXY, proxy);
+#ifdef _WIN32
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, FALSE);
+        curl_easy_setopt(curl, CURLOPT_CAINFO, "crt\\cacert.pem");
+        curl_easy_setopt(curl, CURLOPT_CAPATH, "crt\\cacert.pem");
+#endif
+#ifdef DEBUG
+        curl_easy_setopt(curl, CURLOPT_VERBOSE, 2);
+#endif
         curl_easy_setopt(curl, CURLOPT_USERAGENT, "Windows 10");
         curl_easy_setopt(curl, CURLOPT_BUFFERSIZE, CURL_MAX_READ_SIZE);
-        curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+        //curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writedata);
 
         struct curl_slist *headers = NULL;
@@ -74,7 +82,7 @@ tracks* yam_search(char* query, userInfo* userinfo){
 
 end:
     free(response.data);
-    curl_global_cleanup();
+    curl_easy_cleanup(curl);
     return tracks_info;
 }
 
@@ -168,7 +176,7 @@ tracks* get_tracks_info(json_object* input_info){
     return tmp;
 }
 
-track* get_track_info_from_id(uint id, userInfo* userinfo){
+track* get_track_info_from_id(uint id, userInfo* userinfo, char* proxy){
     response response;
     struct track* track_info = NULL;
     response.len = 0;
@@ -180,6 +188,15 @@ track* get_track_info_from_id(uint id, userInfo* userinfo){
         snprintf(search_query, query_len, "%s%d", "https://api.music.yandex.net/tracks/", id);
 
         curl_easy_setopt(curl, CURLOPT_URL, search_query);
+        curl_easy_setopt(curl, CURLOPT_PROXY, proxy);
+#ifdef _WIN32
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, FALSE);
+        curl_easy_setopt(curl, CURLOPT_CAINFO, "crt\\cacert.pem");
+        curl_easy_setopt(curl, CURLOPT_CAPATH, "crt\\cacert.pem");
+#endif
+#ifdef DEBUG
+        curl_easy_setopt(curl, CURLOPT_VERBOSE, 2);
+#endif
         curl_easy_setopt(curl, CURLOPT_USERAGENT, "Windows 10");
         curl_easy_setopt(curl, CURLOPT_BUFFERSIZE, CURL_MAX_READ_SIZE);
         curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
@@ -201,7 +218,7 @@ track* get_track_info_from_id(uint id, userInfo* userinfo){
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
         res = curl_easy_perform(curl);
         if (res != CURLE_OK) {
-            fprintf(stderr, "curl_easy_perform() failed: %s, at yam_search()\n", curl_easy_strerror(res));
+            fprintf(stderr, "curl_easy_perform() failed: %s, at get_track_info_from_id()\n", curl_easy_strerror(res));
         }
         free(search_query);
         if(!response.data){goto end;}
@@ -209,7 +226,7 @@ track* get_track_info_from_id(uint id, userInfo* userinfo){
     }
 end:
     free(response.data);
-    curl_global_cleanup();
+    curl_easy_cleanup(curl);
     return track_info;
 }
 
@@ -292,7 +309,7 @@ end:
     return NULL;
 }
 
-char* get_download_url(unsigned int trackId, userInfo* userinfo){
+char* get_download_url(unsigned int trackId, userInfo* userinfo, char* proxy){
     response response;
     response.len = 0;
     response.data = NULL;
@@ -312,7 +329,14 @@ char* get_download_url(unsigned int trackId, userInfo* userinfo){
         snprintf(url, 75, "%s%d%s", "https://api.music.yandex.net/tracks/", trackId, "/download-info");
 
         curl_easy_setopt(curl, CURLOPT_URL, url);
+        curl_easy_setopt(curl, CURLOPT_PROXY, proxy);
+#ifdef _WIN32
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, FALSE);
+        curl_easy_setopt(curl, CURLOPT_CAINFO, "crt\\cacert.pem");
+        curl_easy_setopt(curl, CURLOPT_CAPATH, "crt\\cacert.pem");
+#endif
 #ifdef DEBUG
+        curl_easy_setopt(curl, CURLOPT_VERBOSE, 2);
         printf("url: %s\n", url);
 #endif
         curl_easy_setopt(curl, CURLOPT_USERAGENT, "Windows 10");
@@ -342,6 +366,15 @@ char* get_download_url(unsigned int trackId, userInfo* userinfo){
             curl = curl_easy_init();
             if(curl){
                 curl_easy_setopt(curl, CURLOPT_URL, download_info[0].downloadInfoUrl);
+                curl_easy_setopt(curl, CURLOPT_PROXY, proxy);
+#ifdef _WIN32
+                curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, FALSE);
+                curl_easy_setopt(curl, CURLOPT_CAINFO, "crt\\cacert.pem");
+                curl_easy_setopt(curl, CURLOPT_CAPATH, "crt\\cacert.pem");
+#endif
+#ifdef DEBUG
+                curl_easy_setopt(curl, CURLOPT_VERBOSE, 2);
+#endif
                 curl_easy_setopt(curl, CURLOPT_USERAGENT, "Windows 10");
                 curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writedata);
                 curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
@@ -350,6 +383,13 @@ char* get_download_url(unsigned int trackId, userInfo* userinfo){
                 if (res != CURLE_OK) {
                     fprintf(stderr, "curl_easy_perform() failed: %s, at get download info\n", curl_easy_strerror(res));
                 }
+
+                /* If returns 401 code, go to end. */
+                CURLcode info;
+                curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &info);
+                if(info == 401){
+                    goto end;
+                  }
 
                 char* sign = calloc(128, sizeof(char));
                 char* startptr;
@@ -393,7 +433,6 @@ char* get_download_url(unsigned int trackId, userInfo* userinfo){
                 snprintf(download_link, link_s, "%s%s%s%s%c%s%s%c", "https://", host, "/get-mp3/", sign, '/', ts, path, '\0');
 end:
                 curl_easy_cleanup(curl);
-                curl_global_cleanup();
                 return download_link;
             }else{goto end;}
         }else{goto end;}
@@ -401,7 +440,7 @@ end:
     goto end;
 }
 
-userInfo* get_token(char* grant_type, char* username, char* password){
+userInfo* get_token(char* grant_type, char* username, char* password, char* proxy){
     userInfo* token = calloc(1, sizeof(userInfo));
     char* client_id = "23cabbbdc6cd418abb4b39c32c41195d";
     char* client_secret = "53bc75238f0c4d08a118e51fe9203300";
@@ -411,6 +450,15 @@ userInfo* get_token(char* grant_type, char* username, char* password){
     curl = curl_easy_init();
     if(curl){
         curl_easy_setopt(curl, CURLOPT_URL, "https://oauth.yandex.ru/token");
+        curl_easy_setopt(curl, CURLOPT_PROXY, proxy);
+#ifdef _WIN32
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, FALSE);
+        curl_easy_setopt(curl, CURLOPT_CAINFO, "crt\\cacert.pem");
+        curl_easy_setopt(curl, CURLOPT_CAPATH, "crt\\cacert.pem");
+#endif
+#ifdef DEBUG
+        curl_easy_setopt(curl, CURLOPT_VERBOSE, 2);
+#endif
         curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writedata);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
@@ -432,6 +480,7 @@ userInfo* get_token(char* grant_type, char* username, char* password){
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body);
 
         res = curl_easy_perform(curl);
+        password = "ABCDEFGABCDEFGABCDEFG";
         if (res != CURLE_OK) {
             fprintf(stderr, "curl_easy_perform() failed: %s, at get_token()\n", curl_easy_strerror(res));
         }
@@ -455,27 +504,35 @@ userInfo* get_token(char* grant_type, char* username, char* password){
 
         token->uid = json_object_get_int(uid_obj);
 
-        free(response.data);
+        //free(response.data);
         free(body);
         return token;
     }
     return NULL;
 }
-int download_track(const char* name, const char* url) {
+int download_track(const char* name, const char* url, char* proxy) {
     printf("url: %s\n track name: %s\n", url, name);
     FILE *fp;
     curl = curl_easy_init();
     if (curl) {
         fp = fopen(name,"wb");
         curl_easy_setopt(curl, CURLOPT_URL, url);
+        curl_easy_setopt(curl, CURLOPT_PROXY, proxy);
+#ifdef _WIN32
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, FALSE);
+        curl_easy_setopt(curl, CURLOPT_CAINFO, "crt\\cacert.pem");
+        curl_easy_setopt(curl, CURLOPT_CAPATH, "crt\\cacert.pem");
+#endif
+#ifdef DEBUG
+        curl_easy_setopt(curl, CURLOPT_VERBOSE, 2);
+#endif
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, NULL);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, fp);
         res = curl_easy_perform(curl);
         if(res != CURLE_OK) {
             curl_easy_cleanup(curl);
             curl = NULL;
-            fclose(fp);
-            return -1;
+            fclose(fp);            return -1;
         }
         curl_easy_cleanup(curl);
         fclose(fp);
