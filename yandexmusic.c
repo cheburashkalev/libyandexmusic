@@ -11,7 +11,7 @@ CURLcode res;
 
 static track* unjson_track_info(response response);
 
-tracks* yam_search(char* query, userInfo* userinfo, char* proxy){
+tracks* yam_search(char* query, userInfo* userinfo, char* proxy, char* proxy_type){
     response response;
     struct tracks* tracks_info = NULL;
     response.len = 0;
@@ -26,9 +26,12 @@ tracks* yam_search(char* query, userInfo* userinfo, char* proxy){
         snprintf(search_query, query_len, "%s%s%s", "https://api.music.yandex.net/search?text=", query, "&nocorrect=false&type=all&page=0&playlist-in-best=true");
 
         curl_easy_setopt(curl, CURLOPT_URL, search_query);
-        curl_easy_setopt(curl, CURLOPT_PROXY, proxy);
+        if(proxy != NULL){
+            curl_easy_setopt(curl, CURLOPT_PROXYTYPE, proxy_type);
+            curl_easy_setopt(curl, CURLOPT_PROXY, proxy);
+        }
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
 #ifdef _WIN32
-        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, FALSE);
         curl_easy_setopt(curl, CURLOPT_CAINFO, "crt\\cacert.pem");
         curl_easy_setopt(curl, CURLOPT_CAPATH, "crt\\cacert.pem");
 #endif
@@ -176,7 +179,7 @@ tracks* get_tracks_info(json_object* input_info){
     return tmp;
 }
 
-track* get_track_info_from_id(uint id, userInfo* userinfo, char* proxy){
+track* get_track_info_from_id(uint id, userInfo* userinfo, char* proxy, char* proxy_type){
     response response;
     struct track* track_info = NULL;
     response.len = 0;
@@ -188,9 +191,12 @@ track* get_track_info_from_id(uint id, userInfo* userinfo, char* proxy){
         snprintf(search_query, query_len, "%s%d", "https://api.music.yandex.net/tracks/", id);
 
         curl_easy_setopt(curl, CURLOPT_URL, search_query);
-        curl_easy_setopt(curl, CURLOPT_PROXY, proxy);
+        if(proxy != NULL){
+            curl_easy_setopt(curl, CURLOPT_PROXYTYPE, proxy_type);
+            curl_easy_setopt(curl, CURLOPT_PROXY, proxy);
+        }
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
 #ifdef _WIN32
-        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, FALSE);
         curl_easy_setopt(curl, CURLOPT_CAINFO, "crt\\cacert.pem");
         curl_easy_setopt(curl, CURLOPT_CAPATH, "crt\\cacert.pem");
 #endif
@@ -309,7 +315,7 @@ end:
     return NULL;
 }
 
-char* get_download_url(unsigned int trackId, userInfo* userinfo, char* proxy){
+char* get_download_url(unsigned int trackId, userInfo* userinfo, char* proxy, char* proxy_type){
     response response;
     response.len = 0;
     response.data = NULL;
@@ -329,9 +335,12 @@ char* get_download_url(unsigned int trackId, userInfo* userinfo, char* proxy){
         snprintf(url, 75, "%s%d%s", "https://api.music.yandex.net/tracks/", trackId, "/download-info");
 
         curl_easy_setopt(curl, CURLOPT_URL, url);
-        curl_easy_setopt(curl, CURLOPT_PROXY, proxy);
+        if(proxy != NULL){
+            curl_easy_setopt(curl, CURLOPT_PROXYTYPE, proxy_type);
+            curl_easy_setopt(curl, CURLOPT_PROXY, proxy);
+        }
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
 #ifdef _WIN32
-        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, FALSE);
         curl_easy_setopt(curl, CURLOPT_CAINFO, "crt\\cacert.pem");
         curl_easy_setopt(curl, CURLOPT_CAPATH, "crt\\cacert.pem");
 #endif
@@ -366,9 +375,12 @@ char* get_download_url(unsigned int trackId, userInfo* userinfo, char* proxy){
             curl = curl_easy_init();
             if(curl){
                 curl_easy_setopt(curl, CURLOPT_URL, download_info[0].downloadInfoUrl);
-                curl_easy_setopt(curl, CURLOPT_PROXY, proxy);
+                if(proxy != NULL){
+                    curl_easy_setopt(curl, CURLOPT_PROXYTYPE, proxy_type);
+                    curl_easy_setopt(curl, CURLOPT_PROXY, proxy);
+                }
+                curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
 #ifdef _WIN32
-                curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, FALSE);
                 curl_easy_setopt(curl, CURLOPT_CAINFO, "crt\\cacert.pem");
                 curl_easy_setopt(curl, CURLOPT_CAPATH, "crt\\cacert.pem");
 #endif
@@ -440,7 +452,7 @@ end:
     goto end;
 }
 
-userInfo* get_token(char* grant_type, char* username, char* password, char* proxy){
+userInfo* get_token(char* grant_type, char* username, char* password, char* proxy, char* proxy_type){
     userInfo* token = calloc(1, sizeof(userInfo));
     char* client_id = "23cabbbdc6cd418abb4b39c32c41195d";
     char* client_secret = "53bc75238f0c4d08a118e51fe9203300";
@@ -450,9 +462,12 @@ userInfo* get_token(char* grant_type, char* username, char* password, char* prox
     curl = curl_easy_init();
     if(curl){
         curl_easy_setopt(curl, CURLOPT_URL, "https://oauth.yandex.ru/token");
-        curl_easy_setopt(curl, CURLOPT_PROXY, proxy);
+        if(proxy != NULL){
+            curl_easy_setopt(curl, CURLOPT_PROXYTYPE, proxy_type);
+            curl_easy_setopt(curl, CURLOPT_PROXY, proxy);
+        }
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
 #ifdef _WIN32
-        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, FALSE);
         curl_easy_setopt(curl, CURLOPT_CAINFO, "crt\\cacert.pem");
         curl_easy_setopt(curl, CURLOPT_CAPATH, "crt\\cacert.pem");
 #endif
@@ -510,16 +525,19 @@ userInfo* get_token(char* grant_type, char* username, char* password, char* prox
     }
     return NULL;
 }
-int download_track(const char* name, const char* url, char* proxy) {
+int download_track(const char* name, const char* url, char* proxy, char* proxy_type) {
     printf("url: %s\n track name: %s\n", url, name);
     FILE *fp;
     curl = curl_easy_init();
     if (curl) {
         fp = fopen(name,"wb");
         curl_easy_setopt(curl, CURLOPT_URL, url);
-        curl_easy_setopt(curl, CURLOPT_PROXY, proxy);
+        if(proxy != NULL){
+            curl_easy_setopt(curl, CURLOPT_PROXYTYPE, proxy_type);
+            curl_easy_setopt(curl, CURLOPT_PROXY, proxy);
+        }
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
 #ifdef _WIN32
-        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, FALSE);
         curl_easy_setopt(curl, CURLOPT_CAINFO, "crt\\cacert.pem");
         curl_easy_setopt(curl, CURLOPT_CAPATH, "crt\\cacert.pem");
 #endif

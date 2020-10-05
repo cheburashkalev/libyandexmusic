@@ -3,7 +3,7 @@
 #ifdef __cplusplus
 extern "C"{
 #endif
-#define DEBUG
+//#define DEBUG
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -55,14 +55,14 @@ typedef struct cover{
     size_t len;
 }cover;
 
-tracks* yam_search(char* query, userInfo* userinfo, char* proxy);
-char* get_download_url(unsigned int trackId, userInfo* userinfo, char* proxy);
-int download_track(const char* name, const char* url, char* proxy);
-userInfo* get_token(char* grant_type, char* username, char* password, char* proxy);
-track* get_track_info_from_id(unsigned int id, userInfo* userinfo, char* proxy);
+tracks* yam_search(char* query, userInfo* userinfo, char* proxy, char* proxy_type);
+char* get_download_url(unsigned int trackId, userInfo* userinfo, char* proxy, char* proxy_type);
+int download_track(const char* name, const char* url, char* proxy, char* proxy_type);
+userInfo* get_token(char* grant_type, char* username, char* password, char* proxy, char* proxy_type);
+track* get_track_info_from_id(unsigned int id, userInfo* userinfo, char* proxy, char* proxy_type);
 
 /* Cover */
-cover* get_cover(char* url, char* proxy);
+cover* get_cover(char* url, char* proxy, char* proxy_type);
 
 #ifdef __cplusplus
 }

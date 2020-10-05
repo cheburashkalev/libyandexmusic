@@ -2,7 +2,7 @@
 #include "inside.h"
 #include <curl/curl.h>
 
-cover* get_cover(char* url, char* proxy){
+cover* get_cover(char* url, char* proxy, char* proxy_type){
     response response;
     response.len = 0;
     response.data = NULL;
@@ -11,9 +11,12 @@ cover* get_cover(char* url, char* proxy){
     CURLcode res;
     if(curl){
         curl_easy_setopt(curl, CURLOPT_URL, url);
-        curl_easy_setopt(curl, CURLOPT_PROXY, proxy);
+        if(proxy != NULL){
+            curl_easy_setopt(curl, CURLOPT_PROXYTYPE, proxy_type);
+            curl_easy_setopt(curl, CURLOPT_PROXY, proxy);
+        }
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
 #ifdef _WIN32
-        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, FALSE);
         curl_easy_setopt(curl, CURLOPT_CAINFO, "crt\\cacert.pem");
         curl_easy_setopt(curl, CURLOPT_CAPATH, "crt\\cacert.pem");
 #endif
