@@ -30,7 +30,7 @@ typedef struct track{
 }track;
 
 typedef struct tracks{
-    track* item;
+    struct track* item;
     size_t tracks_col;
 }tracks;
 
@@ -60,6 +60,7 @@ char* get_download_url(unsigned int trackId, userInfo* userinfo, char* proxy, ch
 int download_track(const char* name, const char* url, char* proxy, char* proxy_type);
 userInfo* get_token(char* grant_type, char* username, char* password, char* proxy, char* proxy_type);
 track* get_track_info_from_id(unsigned int id, userInfo* userinfo, char* proxy, char* proxy_type);
+tracks* get_likedtracklist(unsigned int uuid, userInfo* userinfo, char* proxy, char* proxy_type);
 
 /* Cover */
 cover* get_cover(char* url, char* proxy, char* proxy_type);

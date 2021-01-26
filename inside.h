@@ -14,4 +14,5 @@ typedef unsigned int uint;
 
 size_t writedata(void*, size_t, size_t, struct response*);
 tracks* get_tracks_info(struct json_object* tracks);
+static tracks* get_likedtracks_info(json_object* input_info, userInfo* userinfo, char* proxy, char* proxy_type);
 #endif // INSIDE_H

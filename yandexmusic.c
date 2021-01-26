@@ -1,24 +1,3 @@
-/*
-	libyandexmusic
-    Copyright (C) 2020  Steftim
-
-    This library is free software; you can redistribute it and/or
-    modify it under the terms of the GNU Lesser General Public
-    License as published by the Free Software Foundation; either
-    version 2.1 of the License, or (at your option) any later version.
-
-    This library is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-    Lesser General Public License for more details.
-
-    You should have received a copy of the GNU Lesser General Public
-    License along with this library; if not, write to the Free Software
-    Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301
-    USA 
-*/
-
-
 #include "yandexmusic.h"
 #include "inside.h"
 #include <curl/curl.h>
@@ -101,12 +80,12 @@ tracks* yam_search(char* query, userInfo* userinfo, char* proxy, char* proxy_typ
 #endif
             goto end;
         }
+        curl_easy_cleanup(curl);
         tracks_info = get_tracks_info(results);
     }
 
 end:
     free(response.data);
-    curl_easy_cleanup(curl);
     return tracks_info;
 }
 
@@ -249,11 +228,12 @@ track* get_track_info_from_id(uint id, userInfo* userinfo, char* proxy, char* pr
         }
         free(search_query);
         if(!response.data){goto end;}
+        curl_easy_cleanup(curl);
         track_info = unjson_track_info(response);
     }
 end:
     free(response.data);
-    curl_easy_cleanup(curl);
+
     return track_info;
 }
 
@@ -422,8 +402,9 @@ char* get_download_url(unsigned int trackId, userInfo* userinfo, char* proxy, ch
                 curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &info);
                 if(info == 401){
                     goto end;
-                  }
+                }
 
+                curl_easy_cleanup(curl);
                 char* sign = calloc(128, sizeof(char));
                 char* startptr;
                 startptr = strstr(download_info[0].downloadInfoUrl, "?sign=") + 6;
@@ -465,7 +446,7 @@ char* get_download_url(unsigned int trackId, userInfo* userinfo, char* proxy, ch
                 download_link = calloc(link_s, sizeof(char));
                 snprintf(download_link, link_s, "%s%s%s%s%c%s%s%c", "https://", host, "/get-mp3/", sign, '/', ts, path, '\0');
 end:
-                curl_easy_cleanup(curl);
+
                 return download_link;
             }else{goto end;}
         }else{goto end;}
@@ -508,15 +489,15 @@ userInfo* get_token(char* grant_type, char* username, char* password, char* prox
         snprintf(body, body_len, "grant_type=%s&client_id=%s&client_secret=%s&username=%s&password=%s", grant_type, client_id, client_secret, username, password);
         body[body_len] = '\0';
 
-        char* content_lenght = calloc(25, sizeof(char));
-        snprintf(content_lenght, 25 * sizeof(char), "content-lenght: %d", (int)body_len);
+        char* content_lenght = malloc(25*sizeof(char));
+        snprintf(content_lenght, sizeof(content_lenght), "content-lenght: %d", (int)body_len);
         headers = curl_slist_append(headers, content_lenght);
         curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body);
 
         res = curl_easy_perform(curl);
-        password = "ABCDEFGABCDEFGABCDEFG";
+        free(content_lenght);
         if (res != CURLE_OK) {
             fprintf(stderr, "curl_easy_perform() failed: %s, at get_token()\n", curl_easy_strerror(res));
         }
@@ -577,4 +558,96 @@ int download_track(const char* name, const char* url, char* proxy, char* proxy_t
         fclose(fp);
     }
     return 0;
+}
+
+tracks* get_likedtracklist(unsigned int uuid, userInfo* userinfo, char* proxy, char* proxy_type){
+    response response;
+    struct tracks* tracks_info = NULL;
+    response.len = 0;
+    response.data = NULL;
+    curl = curl_easy_init();
+    if(curl){
+        char* url = calloc(150, sizeof(char));
+        snprintf(url, 150, "%s%d%s", "https://api.music.yandex.net/users/", uuid, "/likes/tracks");
+
+        curl_easy_setopt(curl, CURLOPT_URL, url);
+        if(proxy != NULL){
+            curl_easy_setopt(curl, CURLOPT_PROXYTYPE, proxy_type);
+            curl_easy_setopt(curl, CURLOPT_PROXY, proxy);
+        }
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
+#ifdef _WIN32
+        curl_easy_setopt(curl, CURLOPT_CAINFO, "crt\\cacert.pem");
+        curl_easy_setopt(curl, CURLOPT_CAPATH, "crt\\cacert.pem");
+#endif
+#ifdef DEBUG
+        curl_easy_setopt(curl, CURLOPT_VERBOSE, 2);
+#endif
+        curl_easy_setopt(curl, CURLOPT_USERAGENT, "Windows 10");
+        curl_easy_setopt(curl, CURLOPT_BUFFERSIZE, CURL_MAX_READ_SIZE);
+        //curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writedata);
+
+        struct curl_slist *headers = NULL;
+        headers = curl_slist_append(headers, "X-Yandex-Music-Client: WindowsPhone/4.20");
+
+        size_t tokenstrlen = 0;
+        char* tokenstr = NULL;
+        if(userinfo->access_token != NULL){
+            tokenstrlen = strlen("Authorization: OAuth ") + strlen(userinfo->access_token) + 1;
+
+            tokenstr = calloc(tokenstrlen, sizeof(char));
+            snprintf(tokenstr, tokenstrlen, "Authorization: OAuth %s", userinfo->access_token);
+            headers = curl_slist_append(headers, tokenstr);
+        }
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+        res = curl_easy_perform(curl);
+        if (res != CURLE_OK) {
+            fprintf(stderr, "curl_easy_perform() failed: %s, at yam_search()\n", curl_easy_strerror(res));
+        }
+
+        free(url);
+        if(!response.data){goto end;}
+
+        int status;
+        struct json_object* json_resp,* result,* library,* tracks;
+        json_resp = json_tokener_parse(response.data);
+        json_object_object_get_ex(json_resp, "result", &result);
+        json_object_object_get_ex(result, "library", &library);
+        status = json_object_object_get_ex(library, "tracks", &tracks);
+        if(status == 0){
+            printf("\n\nError:\t%s\n\n", response.data);
+            goto end;
+        }
+        curl_easy_cleanup(curl);
+        tracks_info = get_likedtracks_info(tracks, userinfo, proxy, proxy_type);
+    }
+
+end:
+    free(response.data);
+    return tracks_info;
+}
+
+
+
+static tracks* get_likedtracks_info(json_object* input_info, userInfo* userinfo, char* proxy, char* proxy_type){
+    size_t trackItm_s = json_object_array_length(input_info);
+    struct tracks* tmp = malloc(sizeof(tracks)*trackItm_s);
+    tmp->item = calloc(trackItm_s, sizeof(struct track));
+    tmp->tracks_col = trackItm_s;
+
+    uint i;
+    tmp->item = calloc(tmp->tracks_col, sizeof(track));
+    for(i = 0; i < tmp->tracks_col; i++){
+        json_object* track,* id;
+        track = json_object_array_get_idx(input_info, i);
+        id = json_object_object_get(track, "id");
+        tmp->item[i] = *get_track_info_from_id(json_object_get_int(id), userinfo, proxy, proxy_type);
+        uint tmpid = json_object_get_int(id);
+        tmp->item[i].id = malloc(sizeof(tmpid));
+        tmp->item[i].id = tmpid;
+    }
+    return tmp;
 }
